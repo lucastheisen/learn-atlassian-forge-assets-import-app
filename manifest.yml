@@ -1,0 +1,52 @@
+modules:
+  jiraServiceManagement:assetsImportType:
+    - key: lucas-laptop-assets-import-app-hello-world-import-type
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: lucas-laptop-assets-import-app
+      description: Lucas Laptop - This is a Hello World app.
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      onDeleteImport:
+        function: onDeleteImport
+      startImport:
+        function: startImport
+      stopImport:
+        function: stopImport
+      importStatus:
+        function: importStatus
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: onDeleteImport
+      handler: index.onDeleteImport
+    - key: startImport
+      handler: index.startImport
+    - key: stopImport
+      handler: index.stopImport
+    - key: importStatus
+      handler: index.importStatus
+    - key: workerQueueFunction
+      handler: index.workerHandler
+    - key: controllerQueueFunction
+      handler: index.controllerHandler
+  consumer:
+    - key: assets-import-app-uk2-assets-imports-tutorial-worker-queue-consumer
+      queue: worker-queue
+      function: workerQueueFunction
+    - key: assets-import-app-uk2-assets-imports-tutorial-controller-queue-consumer
+      queue: controller-queue
+      function: controllerQueueFunction
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - import:import-configuration:cmdb
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/a830c4dc-a700-401b-96af-e97aeb4b159a
