@@ -6,7 +6,23 @@ const resolver = new Resolver();
 
 resolver.define('getText', (req) => {
   console.log(req);
-  return `Hello, there mr lucas! Your payload is ${req.payload["example"]}`;
+  return `Hello! Your payload is ${req.payload["example"]}`;
+});
+
+resolver.define('newToken', async (req) => {
+  // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
+  console.log(`generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
+  console.log(req);
+  const resp = await api
+    .asApp()
+    .requestJira(
+      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/token`,
+      {
+        method: "POST",
+      }
+    );
+  const data = await resp.json()
+  return data["token"]
 });
 
 export const handler = resolver.getDefinitions();

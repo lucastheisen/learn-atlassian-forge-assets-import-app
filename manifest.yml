@@ -44,6 +44,7 @@ resources:
 permissions:
   scopes:
     - import:import-configuration:cmdb
+    - storage:app
 app:
   runtime:
     name: nodejs24.x
