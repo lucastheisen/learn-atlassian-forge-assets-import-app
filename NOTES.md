@@ -3,6 +3,8 @@
 ## Links
 
 * [Quotas and Limits](https://developer.atlassian.com/platform/forge/platform-quotas-and-limits/)
+* [Invocation limits](https://developer.atlassian.com/platform/forge/limits-invocation/)
+* [Forge platform pricing](https://developer.atlassian.com/platform/forge/forge-platform-pricing/)
 * [Use custom entities to store structured data](https://developer.atlassian.com/platform/forge/custom-entities-store-structured-data/): example of using kvs to store data, should show how to store config (setSecret) for aws s3 keys in user sync config
 
 ## Considerations for User Sync
