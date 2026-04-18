@@ -42,6 +42,12 @@ resources:
   - key: main
     path: src/frontend/index.jsx
 permissions:
+  content:
+    scripts:
+      - unsafe-inline
+      - unsafe-eval
+    styles:
+      - unsafe-inline
   scopes:
     - import:import-configuration:cmdb
     - storage:app
