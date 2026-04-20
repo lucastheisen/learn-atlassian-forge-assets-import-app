@@ -2,6 +2,7 @@ import api, { route } from "@forge/api";
 import Resolver from '@forge/resolver';
 import { controllerQueue } from './controller-resolver';
 import { kvs } from '@forge/kvs';
+import { getSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
 
 const resolver = new Resolver();
 
@@ -22,8 +23,8 @@ resolver.define('newToken', async (req) => {
         method: "POST",
       }
     );
-  const data = await resp.json()
-  return data["token"]
+  const data = await resp.json();
+  return data["token"];
 });
 
 resolver.define('getConfig', async(req) => {
@@ -31,37 +32,31 @@ resolver.define('getConfig', async(req) => {
 
   const key = configKey(req.context.extension.workspaceId, req.context.extension.importId);
   const raw = await kvs.getSecret(key);
-  console.log(`loaded <<<${raw}>>>`)
+  console.log(`loaded <<<${raw}>>>`);
+
+  const mapping = JSON.stringify(
+    unmapSchema(
+      await getSchemaAndMapping(
+        req.context.extension.workspaceId,
+        req.context.extension.importId)));
+  console.log(`mapping is: ${mapping}`);
 
   if (!raw) {
     return {
       accessKeyId: "",
       hasSecretAccessKey: false,
-      mapping: {},
       importData: "",
-    }
+      mapping: mapping,
+    };
   }
 
-  const resp = await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/schema-and-mapping`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-        method: "GET",
-      }
-    );
-  const mapping = await resp.json()
-
-  const config = JSON.parse(raw)
+  const config = JSON.parse(raw);
   return {
     accessKeyId: config.accessKeyId,
     hasSecretAccessKey: !!config.secretAccessKey,
-    mapping: JSON.stringify(mapping),
     importData: config.importData,
-  }
+    mapping: mapping,
+  };
 })
 
 resolver.define('setConfig', async(req) => {
