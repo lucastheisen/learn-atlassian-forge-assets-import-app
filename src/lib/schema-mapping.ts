@@ -80,6 +80,9 @@ const generateSchema = async (
   if (schemaResponse.error) {
     throw new Error(`unable to lookup schema for ${schemaId}: ${schemaResponse.error}`);
   }
+  if (!schemaResponse.data) {
+    throw new Error(`unable to lookup schema for ${schemaId}: ${schemaResponse.error}`);
+  }
   const schema = schemaResponse.data
 
   const objectTypes = await client
@@ -118,8 +121,8 @@ const generateSchema = async (
 
   return {
     objectSchema: {
-      description: schema!.description || schema!.name,
-      name: schema!.name,
+      description: schema.description ?? schema.name,
+      name: schema.name,
       objectTypes: schemaObjectTypes as [ObjectType, ...ObjectType[]],
     }
   };
@@ -131,28 +134,24 @@ export const getSchemaAndMapping = async (
   schemaId: string,
 ): Promise<AtlassianJSMInsightImportsSchemaAndMappingDefinition> => {
   const client = assetsClient(workspaceId);
-  const schemaAndMapping = await client.GET(
+  const schema = await generateSchema(client, schemaId)
+
+  const {data, error} = await client.GET(
     "/importsource/{importSourceId}/schema-and-mapping",
-    {params: {path: {importSourceId: importId}}})
-  if (schemaAndMapping.error) {
-    throw new Error(`unable to lookup schema and mapping for ${importId}: ${schemaAndMapping.error}`);
-  }
-  const newMapp = schemaAndMapping.data as AtlassianJSMInsightImportsSchemaAndMappingDefinition
-
-  const generatedSchema = await generateSchema(client, schemaId)
-
-  const resp = await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${workspaceId}/v1/importsource/${importId}/schema-and-mapping`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-        method: "GET",
+    {
+      params: {
+        path: {
+          importSourceId: importId,
+        }
       }
-    );
-  const mapping = await resp.json() as AtlassianJSMInsightImportsSchemaAndMappingDefinition
+    });
+  if (error) {
+    throw new Error(`unable to lookup schema-and-mapping: ${error}`)
+  }
+  if (!data) {
+    throw new Error(`data empty schema-and-mapping`)
+  }
+  const schemaAndMapping = data as AtlassianJSMInsightImportsSchemaAndMappingDefinition
 
   const objectTypes = await client
     .GET("/objectschema/{id}/objecttypes", {params: {path: {id: schemaId}}})
@@ -179,7 +178,7 @@ export const getSchemaAndMapping = async (
       };
     });
 
-  return mapping
+  return schemaAndMapping
 };
 
 const mapObjectAttributes = (

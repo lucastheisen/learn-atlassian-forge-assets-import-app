@@ -15,7 +15,7 @@ set -e
 # if you navigate to the API documentation page:
 #   https://developer.atlassian.com/cloud/assets/rest/api-group-importsource
 # this is the download link for OpenAPI
-readonly JSON_SCHEMA="https://dac-static.atlassian.com/cloud/assets/swagger.v3.json?_v=1.135.71"
+readonly JSON_SCHEMA="https://dac-static.atlassian.com/cloud/assets/swagger.v3.json?_v=1.135.74"
 
 readonly ROOT_DIR="$(dirname "$(readlink --canonicalize-existing "$0")")"
 

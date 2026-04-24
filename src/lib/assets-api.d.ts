@@ -971,6 +971,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/config/referencetype": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get reference type */
+        get: operations["ReferenceType - List"];
+        put?: never;
+        /** @description Update a reference type */
+        post: operations["ReferenceType - Create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/global/config/objectschema/{id}/property": {
         parameters: {
             query?: never;
@@ -1726,6 +1744,17 @@ export interface components {
             /** @deprecated */
             removable?: boolean;
             objectSchemaId?: string;
+            cdmData?: components["schemas"]["ReferenceTypeCdmData"];
+        };
+        /** ReferenceTypeCdmData */
+        ReferenceTypeCdmData: {
+            types?: components["schemas"]["ReferenceTypeCdmType"][];
+        };
+        /** ReferenceTypeCdmType */
+        ReferenceTypeCdmType: {
+            key?: string;
+            version?: number;
+            opinionated?: boolean;
         };
         /**
          * Status
@@ -1743,6 +1772,13 @@ export interface components {
              *     | PENDING | 2 | Yellow |
              */
             category: number;
+            objectSchemaId?: string;
+        };
+        /** ReferenceTypeIn */
+        ReferenceTypeIn: {
+            name: string;
+            description?: string;
+            color?: string;
             objectSchemaId?: string;
         };
         /** StatusIn */
@@ -8462,6 +8498,77 @@ export interface operations {
             400: components["responses"]["trait_badRequest_400"];
             401: components["responses"]["trait_requireAuthentication_401"];
             404: components["responses"]["trait_notFound_404"];
+            500: components["responses"]["trait_internalServerError_500"];
+        };
+    };
+    "ReferenceType - List": {
+        parameters: {
+            query?: {
+                /** @description Include reference types for the object schema id. If supplied reference types for the object schema will be returned otherwise all global will be returned */
+                objectSchemaId?: string;
+                /** @description Include all reference types. Defaults to false */
+                includeAll?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferenceType"][];
+                };
+            };
+            401: components["responses"]["trait_requireAuthentication_401"];
+            500: components["responses"]["trait_internalServerError_500"];
+        };
+    };
+    "ReferenceType - Create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Depends on",
+                 *       "description": "",
+                 *       "color": "42526E",
+                 *       "objectSchemaId": "27"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ReferenceTypeIn"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "36",
+                     *       "name": "Depends on",
+                     *       "description": "",
+                     *       "color": "42526E",
+                     *       "url16": "https://api.atlassian.com/ex/jira/{cloudId}/jsm/assets/workspace/f1668d0c-828c-470c-b7d1-8c4f48cd345a/v1/config/referencetype/36/image.png?size=16",
+                     *       "removable": true,
+                     *       "objectSchemaId": "27"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReferenceType"];
+                };
+            };
+            400: components["responses"]["trait_badRequest_400"];
+            401: components["responses"]["trait_requireAuthentication_401"];
             500: components["responses"]["trait_internalServerError_500"];
         };
     };
