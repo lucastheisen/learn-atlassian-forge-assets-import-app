@@ -1,16 +1,27 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": ["ES2022"],
-    "strict": true,
-    "noEmit": false,
     "allowJs": true,
     "checkJs": false,
     "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react",
+    "lib": ["ES2022"],
+    "module": "nodenext",
+    "noEmit": false,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUncheckedIndexedAccess": true,
+    "outDir": "dist",
     "resolveJsonModule": true,
+    "rootDir": "src",
     "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["src", "test", "tests", "static"]
+  "include": ["src"]
 }

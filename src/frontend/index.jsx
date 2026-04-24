@@ -112,7 +112,7 @@ const App = () => {
             appearance="subtle"
             iconBefore={isEditSecretAccessKey ? "undo" : "edit"}
             type="button"
-            onClick={(e) => toggleEditSecretAccessKey(!isEditSecretAccessKey)}
+            onClick={(_e) => toggleEditSecretAccessKey(!isEditSecretAccessKey)}
           />
         </Inline>
       </FormSection>

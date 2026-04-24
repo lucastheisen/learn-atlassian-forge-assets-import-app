@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { mapSchema, Mapping, unmapSchema } from './schema-mapping';
-import {
+import { describe, expect, it } from 'vitest';
+import type {
   AtlassianJSMInsightImportsSchemaAndMappingDefinition,
   ObjectTypeMapping,
 } from './assets-schema-and-mapping';
+import { type Mapping, mapSchema, unmapSchema } from './schema-mapping';
 
 describe('Schema Mapping', () => {
   const mockSchema = (...mappings: ObjectTypeMapping[]): AtlassianJSMInsightImportsSchemaAndMappingDefinition => {
@@ -68,14 +68,6 @@ describe('Schema Mapping', () => {
 
   describe('mapSchema', () => {
     it('should map to same schema with no supplied mapping', () => {
-      const mockMapping: Mapping = {
-        attributeMap: new Map([
-          ['Field1', ['dataField1']],
-          ['Field2', ['dataField2']],
-        ]),
-        objectTypeName: 'InvalidType',
-        selector: 'test-selector',
-      };
       expect(mapSchema(mockSchema(), [])).toStrictEqual(mockSchema());
     });
 
@@ -88,7 +80,6 @@ describe('Schema Mapping', () => {
         objectTypeName: 'TestType',
         selector: 'test-selector',
       };
-      const result = mapSchema(mockSchema(), [mockMapping]);
       expect(mapSchema(mockSchema(), [mockMapping]))
         .toStrictEqual(mockSchema({
           attributesMapping: [

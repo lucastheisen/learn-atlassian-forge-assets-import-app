@@ -1,0 +1,32 @@
+mapping:
+  objectTypeMappings:
+    - objectTypeExternalId: 'cmdb::externalId/463500cb-d5ae-4579-8d27-7454afbc2824'
+      objectTypeName: FAA User
+      selector: faaUsers
+      description: Mapping for FAA User
+      attributesMapping:
+        - attributeExternalId: 'cmdb::externalId/344704bf-b30a-4722-921b-4df92154d4db'
+          attributeName: Active
+          attributeLocators:
+            - active
+        - attributeExternalId: 'cmdb::externalId/116c8993-7d81-4d7d-afa3-51d13073d451'
+          attributeName: Email (all lower case)
+          attributeLocators:
+            - email
+          externalIdPart: true
+        - attributeExternalId: 'cmdb::externalId/651ed793-1a5a-4c1f-b819-9b4da29eedcb'
+          attributeName: First Name
+          attributeLocators:
+            - first_name
+        - attributeExternalId: 'cmdb::externalId/f82d0897-d247-4d4f-8ddf-1a5299415a45'
+          attributeName: Last Name
+          attributeLocators:
+            - last_name
+        - attributeExternalId: 'cmdb::externalId/c66e37af-a9d6-405e-80eb-8e02e28c09d3'
+          attributeName: Name
+          attributeLocators:
+            - name
+        - attributeExternalId: 'cmdb::externalId/f268977f-6da4-4035-b25a-bb03952141d2'
+          attributeName: Phone Number
+          attributeLocators:
+            - phone_number

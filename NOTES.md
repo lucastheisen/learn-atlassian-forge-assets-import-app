@@ -6,6 +6,11 @@
 * [Invocation limits](https://developer.atlassian.com/platform/forge/limits-invocation/)
 * [Forge platform pricing](https://developer.atlassian.com/platform/forge/forge-platform-pricing/)
 * [Use custom entities to store structured data](https://developer.atlassian.com/platform/forge/custom-entities-store-structured-data/): example of using kvs to store data, should show how to store config (setSecret) for aws s3 keys in user sync config
+* [Which assets import tutorial is the most up to date recommendation for using async queues?](https://community.developer.atlassian.com/t/which-assets-import-tutorial-is-the-most-up-to-date-recommendation-for-using-async-queues/100308/2)
+
+## Getting Started
+
+Follow [these instructions](https://developer.atlassian.com/platform/forge/getting-started/) to set up `node` and `forge`.
 
 ## Considerations for User Sync
 

@@ -6,27 +6,6 @@ import { getSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
 
 const resolver = new Resolver();
 
-resolver.define('getText', (req) => {
-  console.log(req);
-  return `Hello! Your payload is ${req.payload["example"]}`;
-});
-
-resolver.define('newToken', async (req) => {
-  // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
-  console.log(`generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
-  console.log(req);
-  const resp = await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/token`,
-      {
-        method: "POST",
-      }
-    );
-  const data = await resp.json();
-  return data["token"];
-});
-
 resolver.define('getConfig', async(req) => {
   console.log(`getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
 
@@ -38,7 +17,8 @@ resolver.define('getConfig', async(req) => {
     unmapSchema(
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
-        req.context.extension.importId)));
+        req.context.extension.importId,
+        req.context.extension.schemaId)));
   console.log(`mapping is: ${mapping}`);
 
   if (!raw) {
@@ -58,6 +38,27 @@ resolver.define('getConfig', async(req) => {
     mapping: mapping,
   };
 })
+
+resolver.define('getText', (req) => {
+  console.log(req);
+  return `Hello! Your payload is ${req.payload.example}`;
+});
+
+resolver.define('newToken', async (req) => {
+  // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
+  console.log(`generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
+  console.log(req);
+  const resp = await api
+    .asApp()
+    .requestJira(
+      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/token`,
+      {
+        method: "POST",
+      }
+    );
+  const data = await resp.json();
+  return data.token;
+});
 
 resolver.define('setConfig', async(req) => {
   console.log(`saving configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
@@ -97,7 +98,7 @@ export const configKey = (workspaceId, importId) => `assets-import-config:${work
 
 export const handler = resolver.getDefinitions();
 export const onDeleteImport = async (context) => {
-  console.log('import with id ', context.importId + ' got deleted');
+  console.log('import with id ', `${context.importId} got deleted`);
 
   return {
     result: 'on delete import'
@@ -105,7 +106,7 @@ export const onDeleteImport = async (context) => {
 };
 
 export const startImport = async (context) => {
-  console.log('import with id ', context.importId + ' got started');
+  console.log('import with id ', `${context.importId} got started`);
 
   // Call Assets API here to mark import as started
   const resp = await api
@@ -130,7 +131,7 @@ export const startImport = async (context) => {
 };
 
 export const stopImport = async (context) => {
-  console.log('import with id ', context.importId + ' got stopped');
+  console.log('import with id ', `${context.importId} got stopped`);
 
   return {
     result: 'stop import'
@@ -140,7 +141,7 @@ export const stopImport = async (context) => {
 export const importStatus = async (context) => {
   const status = 'READY';
 
-  console.log(`import with id `, context.importId + ` sending import progress ${status}`);
+  console.log(`import with id `, `${context.importId} sending import progress ${status}`);
 
   return {
     status: status
