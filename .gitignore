@@ -52,4 +52,5 @@ Thumbs.db
 /.forge/
 
 token.txt
+*.token
 users.yml

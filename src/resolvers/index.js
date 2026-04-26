@@ -2,7 +2,7 @@ import api, { route } from "@forge/api";
 import Resolver from '@forge/resolver';
 import { controllerQueue } from './controller-resolver';
 import { kvs } from '@forge/kvs';
-import { getSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
+import { getSchemaAndMapping, mapSchema, setSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
 
 const resolver = new Resolver();
 
@@ -18,7 +18,9 @@ resolver.define('getConfig', async(req) => {
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
         req.context.extension.importId,
-        req.context.extension.schemaId)));
+        req.context.extension.schemaId)),
+    (key, value) => value === undefined ? null : value,
+    2);
   console.log(`mapping is: ${mapping}`);
 
   if (!raw) {
@@ -77,19 +79,17 @@ resolver.define('setConfig', async(req) => {
   console.log(`saving <<<${newValue}>>>`);
   await kvs.setSecret(key, newValue);
 
-  await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}`,
-      {
-        body: JSON.stringify(req.payload.mapping),
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-        method: "PUT",
-      }
-    );
+  const mapping = JSON.parse(req.payload.mapping)
+
+  await setSchemaAndMapping(
+    req.context.extension.workspaceId,
+    req.context.extension.importId,
+    mapSchema(
+      await getSchemaAndMapping(
+        req.context.extension.workspaceId,
+        req.context.extension.importId,
+        req.context.extension.schemaId),
+      mapping))
 
   return { ok: true }
 })

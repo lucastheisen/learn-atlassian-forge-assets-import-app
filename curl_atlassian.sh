@@ -42,8 +42,7 @@ function auth_assets_importsource {
 
 function assets_url {
   local path_and_query=$1
-  printf 'https://api.atlassian.com/ex/jira/%s/jsm/assets/workspace/%s/v1/%s' \
-    "$(cloud_id)" \
+  printf 'https://api.atlassian.com/jsm/assets/workspace/%s/v1/%s' \
     "$(workspace_id)" \
     "${path_and_query}"
 }
@@ -116,3 +115,4 @@ function main {
 }
 
 main "$@"
+

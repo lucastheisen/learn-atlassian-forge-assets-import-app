@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import ForgeReconciler, {
   Button,
   Form,
@@ -23,6 +23,33 @@ const App = () => {
   const [mapping, setMapping] = useState('');
   const [importData, setImportData] = useState('');
 
+  const toggleEditSecretAccessKey = useCallback(async (editable) => {
+    if (editable) {
+      setSecretAccessKey("")
+      setEditSecretAccessKey(true)
+    }
+    else {
+      setSecretAccessKey("********")
+      setEditSecretAccessKey(false)
+    }
+  }, [])
+
+  const generateToken = async () => {
+    setToken("Generating token...")
+    invoke('newToken').then(setToken)
+  }
+
+  const onSubmit = async () => {
+    console.log('submit button clicked');
+    await invoke('setConfig', {
+      accessKeyId: accessKeyId,
+      isEditSecretAccessKey: isEditSecretAccessKey,
+      secretAccessKey: secretAccessKey,
+      mapping: mapping,
+      importData: importData,
+    })
+  };
+
   useEffect(() => {
     view.getContext().then(setContext);
     invoke('getText', { example: 'my-invoke-variable' }).then(setData);
@@ -36,33 +63,6 @@ const App = () => {
           setImportData(config.importData);
         });
   }, []);
-
-  const toggleEditSecretAccessKey = async (editable) => {
-    if (editable) {
-      setSecretAccessKey("")
-      setEditSecretAccessKey(true)
-    }
-    else {
-      setSecretAccessKey("********")
-      setEditSecretAccessKey(false)
-    }
-  }
-
-  const generateToken = async () => {
-    setToken("Generating token...")
-    invoke('newToken').then(setToken)
-  }
-
-  const onSubmit = async () => {
-    console.log('submit button clicked');
-    invoke('setConfig', {
-      accessKeyId: accessKeyId,
-      isEditSecretAccessKey: isEditSecretAccessKey,
-      secretAccessKey: secretAccessKey,
-      mapping: mapping,
-      importData: importData,
-    })
-  };
 
   return (
     <Form onSubmit={onSubmit}>

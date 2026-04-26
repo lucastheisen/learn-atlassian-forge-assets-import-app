@@ -20,7 +20,7 @@
   "dependencies": {
     "@forge/api": "^7.1.3",
     "@forge/bridge": "^5.15.1",
-    "@forge/events": "^0.2.0",
+    "@forge/events": "^2.1.3",
     "@forge/kvs": "^1.6.1",
     "@forge/react": "^11.14.1",
     "@forge/resolver": "^1.7.1",

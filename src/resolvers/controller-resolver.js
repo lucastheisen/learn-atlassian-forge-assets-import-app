@@ -3,7 +3,7 @@ import { workerQueue } from './worker-resolver';
 
 export const controllerQueue = new Queue({ key: 'controller-queue' });
 
-export async function controllerHandler(event, context) {
+export async function controllerHandler(_event, _context) {
   // Push initial work item to worker queue here
   // e.g. await workerQueue.push({ eventContext: workItem });
 
@@ -13,5 +13,5 @@ export async function controllerHandler(event, context) {
 
   // Once work items are all complete call the Assets API to signal the completion of data submission
 
-  const id = await workerQueue.push({ body: { eventContext: { workId: 'your-work-id' } } });
+  const _id = await workerQueue.push({ body: { eventContext: { workId: 'your-work-id' } } });
 }

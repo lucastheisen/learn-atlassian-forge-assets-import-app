@@ -7674,9 +7674,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": {
-                        entries?: components["schemas"]["ObjectType"][];
-                    };
+                    "application/json": components["schemas"]["ObjectType"][];
                 };
             };
             401: components["responses"]["trait_requireAuthentication_401"];

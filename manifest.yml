@@ -50,6 +50,11 @@ permissions:
       - unsafe-inline
   scopes:
     - import:import-configuration:cmdb
+    - read:cmdb-attribute:jira
+    - read:cmdb-object:jira
+    - read:cmdb-schema:jira
+    - read:cmdb-type:jira
+    - write:cmdb-object:jira
     - storage:app
 app:
   runtime:
