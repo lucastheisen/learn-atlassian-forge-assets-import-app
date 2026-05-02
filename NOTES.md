@@ -7,6 +7,7 @@
 * [Forge platform pricing](https://developer.atlassian.com/platform/forge/forge-platform-pricing/)
 * [Use custom entities to store structured data](https://developer.atlassian.com/platform/forge/custom-entities-store-structured-data/): example of using kvs to store data, should show how to store config (setSecret) for aws s3 keys in user sync config
 * [Which assets import tutorial is the most up to date recommendation for using async queues?](https://community.developer.atlassian.com/t/which-assets-import-tutorial-is-the-most-up-to-date-recommendation-for-using-async-queues/100308/2)
+* [How can i enable the “Edit mapping” feature on a custom asset import app](https://community.developer.atlassian.com/t/how-can-i-enable-the-edit-mapping-feature-on-a-custom-asset-import-app/100305)
 
 ## Getting Started
 

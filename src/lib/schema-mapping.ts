@@ -11,6 +11,7 @@ import { assetsClient } from "./forge-clients"
 
 export type Mapping = {
   attributeMap: Record<string, string[]>,
+  icon: string | undefined,
   objectTypeName: string | undefined,
   selector: string | undefined,
 };
@@ -248,7 +249,7 @@ export const setSchemaAndMapping = async (
       console.log('URL:', request.url);
       console.log('Method:', request.method);
       console.log('Headers:', Object.fromEntries(request.headers.entries()));
-      
+
       // Log body if it exists (cloning to avoid consuming the stream)
       if (request.body) {
         request.clone().text().then(text => console.log('Body:', text));
@@ -314,7 +315,7 @@ const unmapObjectType = (
   return (objectType: ObjectType): Mapping => {
     const currentMapping = current?.find(v => v.objectTypeName === objectType.name);
     const mappedAttributes = Object.fromEntries(
-      objectType.attributes?.map(unmapObjectAttribute(currentMapping?.attributesMapping)) 
+      objectType.attributes?.map(unmapObjectAttribute(currentMapping?.attributesMapping))
         ?? []);
     const mapping: Mapping = {
       attributeMap: mappedAttributes,
