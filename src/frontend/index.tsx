@@ -1,4 +1,8 @@
-import { invoke, view } from '@forge/bridge';
+import {
+  type FullContext,
+  invoke,
+  view
+} from '@forge/bridge';
 import ForgeReconciler, {
   Button,
   Form,
@@ -11,11 +15,14 @@ import ForgeReconciler, {
   Textfield,
 } from '@forge/react';
 import React, { useCallback, useEffect, useState } from 'react';
+import type {
+  Config
+} from '../resolvers/index'
 
 const App = () => {
-  const [data, setData] = useState(null);
-  const [context, setContext] = useState(null);
-  const [token, setToken] = useState(null);
+  const [data, setData] = useState<string | null>(null);
+  const [context, setContext] = useState<FullContext | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const [accessKeyId, setAccessKeyId] = useState('');
   const [secretAccessKey, setSecretAccessKey] = useState('');
@@ -23,7 +30,7 @@ const App = () => {
   const [mapping, setMapping] = useState('');
   const [importData, setImportData] = useState('');
 
-  const toggleEditSecretAccessKey = useCallback(async (editable) => {
+  const toggleEditSecretAccessKey = useCallback(async (editable: boolean) => {
     if (editable) {
       setSecretAccessKey("")
       setEditSecretAccessKey(true)
@@ -36,7 +43,7 @@ const App = () => {
 
   const generateToken = async () => {
     setToken("Generating token...")
-    invoke('newToken').then(setToken)
+    invoke<string>('newToken').then(setToken)
   }
 
   const onSubmit = async () => {
@@ -52,8 +59,8 @@ const App = () => {
 
   useEffect(() => {
     view.getContext().then(setContext);
-    invoke('getText', { example: 'my-invoke-variable' }).then(setData);
-    invoke('getConfig')
+    invoke<string>('getText', { example: 'my-invoke-variable' }).then(setData);
+    invoke<Config>('getConfig')
       .then(
         (config) =>
         {
@@ -80,10 +87,10 @@ const App = () => {
           name="token"
           id="token"
           isReadOnly={true}
-          value={token}
+          value={token ?? ""}
         />
         <Button
-          appearance="secondary"
+          appearance="subtle"
           type="button"
           onClick={generateToken}
         >
@@ -113,7 +120,9 @@ const App = () => {
             iconBefore={isEditSecretAccessKey ? "undo" : "edit"}
             type="button"
             onClick={(_e) => toggleEditSecretAccessKey(!isEditSecretAccessKey)}
-          />
+          >
+            {null}
+          </Button>
         </Inline>
       </FormSection>
       <FormSection>

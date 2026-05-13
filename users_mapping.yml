@@ -1,0 +1,18 @@
+- attributeMap:
+    Key: []
+    Name:
+      - name
+    Active:
+      - active
+    First Name:
+      - first_name
+    Last Name:
+      - last_name
+    Email Address:
+      - email
+    Phone Number:
+      - phone
+    Title:
+      - title
+  objectTypeName: User
+  selector: users

@@ -40,7 +40,7 @@ modules:
       function: controllerQueueFunction
 resources:
   - key: main
-    path: src/frontend/index.jsx
+    path: src/frontend/index.tsx
 permissions:
   content:
     scripts:

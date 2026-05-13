@@ -1,16 +1,39 @@
 import api, { route } from "@forge/api";
-import Resolver from '@forge/resolver';
-import { controllerQueue } from './controller-resolver';
 import { kvs } from '@forge/kvs';
+import Resolver from '@forge/resolver';
 import { getSchemaAndMapping, mapSchema, setSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
+import { controllerQueue } from './controller-resolver';
 
 const resolver = new Resolver();
+
+export interface Config {
+  accessKeyId: string;
+  hasSecretAccessKey: boolean;
+  // json string
+  mapping: string;
+  // json string
+  importData: string;
+}
+
+// seems to be defined here:
+//   https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-service-management-assets-import-type/
+// but also no types found in current deps:
+//   ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
+//   $ grep -rE 'workspaceId\??:' node_modules/@forge/ -C 10 | grep schema
+//
+//   ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
+//   $
+export interface ImportContext {
+  importId: string
+  workspaceId: string
+  [key: string]: unknown
+}
 
 resolver.define('getConfig', async(req) => {
   console.log(`getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
 
   const key = configKey(req.context.extension.workspaceId, req.context.extension.importId);
-  const raw = await kvs.getSecret(key);
+  const raw = await kvs.getSecret<string>(key);
   console.log(`loaded <<<${raw}>>>`);
 
   const mapping = JSON.stringify(
@@ -19,7 +42,7 @@ resolver.define('getConfig', async(req) => {
         req.context.extension.workspaceId,
         req.context.extension.importId,
         req.context.extension.schemaId)),
-    (key, value) => value === undefined ? null : value,
+    (_, value) => value === undefined ? null : value,
     2);
   console.log(`mapping is: ${mapping}`);
 
@@ -66,7 +89,7 @@ resolver.define('setConfig', async(req) => {
   console.log(`saving configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
 
   const key = configKey(req.context.extension.workspaceId, req.context.extension.importId);
-  const raw = await kvs.getSecret(key);
+  const raw = await kvs.getSecret<string>(key);
 
   const config = raw ? JSON.parse(raw) : {};
   const newConfig = {
@@ -94,10 +117,10 @@ resolver.define('setConfig', async(req) => {
   return { ok: true }
 })
 
-export const configKey = (workspaceId, importId) => `assets-import-config:${workspaceId}:${importId}`;
+export const configKey = (workspaceId: string, importId: string) => `assets-import-config:${workspaceId}:${importId}`;
 
 export const handler = resolver.getDefinitions();
-export const onDeleteImport = async (context) => {
+export const onDeleteImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got deleted`);
 
   return {
@@ -105,7 +128,10 @@ export const onDeleteImport = async (context) => {
   };
 };
 
-export const startImport = async (context) => {
+export const startImport = async (context: ImportContext, ...args: unknown[]) => {
+  console.debug(
+    `start import: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
+  );
   console.log('import with id ', `${context.importId} got started`);
 
   // Call Assets API here to mark import as started
@@ -130,7 +156,7 @@ export const startImport = async (context) => {
   };
 };
 
-export const stopImport = async (context) => {
+export const stopImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got stopped`);
 
   return {
@@ -138,7 +164,7 @@ export const stopImport = async (context) => {
   };
 };
 
-export const importStatus = async (context) => {
+export const importStatus = async (context: ImportContext) => {
   const status = 'READY';
 
   console.log(`import with id `, `${context.importId} sending import progress ${status}`);
