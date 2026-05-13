@@ -11,7 +11,6 @@ import { assetsClient } from "./forge-clients"
 
 export type Mapping = {
   attributeMap: Record<string, string[]>,
-  icon: string | undefined,
   objectTypeName: string | undefined,
   selector: string | undefined,
 };
@@ -243,6 +242,17 @@ export const setSchemaAndMapping = async (
 ) => {
   const client = assetsClient(workspaceId);
 
+  // iconSchema is an optional field, but if supplied, it must have at least one
+  // icon or it will fail but it is returned empty by the /schema-and-mapping
+  // endpoint violating its own schema:
+  //   https://community.developer.atlassian.com/t/utilizing-existing-schema-mappings-and-dynamic-mapping-generation-for-assets-imports/90736/3?u=lucastheisen
+  // We remove iconSchema if it is not defining any icons to allow the update
+  // to succeed.
+  if (schemaAndMapping.schema.iconSchema?.icons.length === 0) {
+    delete(schemaAndMapping.schema.iconSchema)
+  }
+
+  // add request/response debugging, wont want this in the final implementation
   client.use({
     onRequest: ({request, options}): Request => {
       console.log('--- Outgoing Request ---');
@@ -250,7 +260,6 @@ export const setSchemaAndMapping = async (
       console.log('Method:', request.method);
       console.log('Headers:', Object.fromEntries(request.headers.entries()));
 
-      // Log body if it exists (cloning to avoid consuming the stream)
       if (request.body) {
         request.clone().text().then(text => console.log('Body:', text));
       }
@@ -258,27 +267,24 @@ export const setSchemaAndMapping = async (
       return request;
     },
     onResponse: async ({ response }): Promise<Response | undefined> => {
-      // 1. Clone the response so the stream remains available for the handler
+      // clone the response so the stream remains available for the handler
       const clonedResponse = response.clone();
-
-      // 2. Read the raw text from the clone
       const rawBody = await clonedResponse.text();
-
-      // 3. Log or dump the full raw response
       console.log("Full Raw Response:", {
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
         body: rawBody,
       });
 
-      // Return undefined to let the original response proceed to your handler
+      // return undefined to let the original response proceed to your handler
       return undefined;
     },
   });
 
   console.log(`schemaAndMappings: ${JSON.stringify(schemaAndMapping)}`)
   const { data, error } = await client
-    .PUT(
+    //.PUT(
+    .PATCH(
       "/importsource/{importSourceId}/mapping",
       {
         headers: {

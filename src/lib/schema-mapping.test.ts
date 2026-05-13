@@ -73,10 +73,10 @@ describe('Schema Mapping', () => {
 
     it('should map schema fields to object type correctly', () => {
       const mockMapping: Mapping = {
-        attributeMap: new Map([
-          ['Field1', ['dataField1']],
-          ['Field2', ['dataField2']],
-        ]),
+        attributeMap: {
+          'Field1': ['dataField1'],
+          'Field2': ['dataField2'],
+        },
         objectTypeName: 'TestType',
         selector: 'test-selector',
       };
