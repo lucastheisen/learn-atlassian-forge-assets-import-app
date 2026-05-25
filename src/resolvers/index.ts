@@ -140,11 +140,6 @@ resolver.define('setConfig', async(req) => {
 
 export const configKey = (workspaceId: string, importId: string) => `assets-import-config:${workspaceId}:${importId}`;
 
-export interface StatusInfo {
-  executionId: string
-  status: string
-}
-
 export const handler = resolver.getDefinitions();
 export const onDeleteImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got deleted`);
@@ -181,8 +176,7 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
     throw new Error(`data empty status for execution`);
   }
 
-  const statusInfo = statusResp.data as StatusInfo;
-  console.log('BEFORE STARTING, import with id has latest execution: ', statusInfo);
+  console.log('BEFORE STARTING, import with id has latest execution: ', statusResp.data);
 
   const { data, error } = await client.POST(
     "/importsource/{importSourceId}/executions",
@@ -250,8 +244,7 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
     throw new Error(`data empty status for execution`);
   }
 
-  const statusInfoAfter = statusRespAfter.data as StatusInfo;
-  console.log('AFTER STARTING, import with id has latest execution: ', statusInfoAfter);
+  console.log('AFTER STARTING, import with id has latest execution: ', statusRespAfter.data);
 
   return {
     result: 'start import'
@@ -281,8 +274,7 @@ export const stopImport = async (context: ImportContext) => {
     throw new Error(`data empty status for execution`);
   }
 
-  const statusInfo = statusResp.data as StatusInfo;
-  console.log('import with id has latest execution: ', statusInfo);
+  console.log('import with id has latest execution: ', statusResp.data);
 
   const { error } = await client.DELETE(
     "/importsource/{importSourceId}/executions/{importExecutionId}",
@@ -293,7 +285,7 @@ export const stopImport = async (context: ImportContext) => {
         params: {
           path: {
             importSourceId: context.importId,
-            importExecutionId: statusInfo.executionId,
+            importExecutionId: statusResp.data.executionId,
           },
         },
     });

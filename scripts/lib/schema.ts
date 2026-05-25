@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, readdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { basename, dirname, extname, join } from 'node:path'
 import type { Operation } from 'fast-json-patch'
 
 // jsonpatch is currently only CommonJS
@@ -28,6 +29,49 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+function getPatchFilePrefix(schemaPath: string): { dir: string; stem: string; prefix: string } {
+  const dir = dirname(schemaPath)
+  const ext = extname(schemaPath)
+  const stem = basename(schemaPath, ext)
+
+  return {
+    dir,
+    stem,
+    prefix: `${stem}.patch.`,
+  }
+}
+
+export function getPatchFileName(schemaPath: string, reason: string): string {
+  const { dir, stem } = getPatchFilePrefix(schemaPath)
+  return join(dir, `${stem}.patch.${reason}.json`)
+}
+
+async function listPatchFiles(schemaPath: string): Promise<string[]> {
+  const { dir, prefix } = getPatchFilePrefix(schemaPath)
+  const entries = await readdir(dir, { withFileTypes: true })
+
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => name.startsWith(prefix) && name.endsWith('.json'))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => join(dir, name))
+}
+
+export async function readPatchedSchema<T>(schemaPath: string, url: string): Promise<T> {
+  let document = JSON.parse(await readSchema(schemaPath, url)) as T
+  for (const patch of await readPatches(schemaPath)) {
+    try {
+      document = jsonpatch.applyPatch(document, patch.operations, true, false).newDocument
+    } catch (error) {
+      throw new Error(`Failed to apply patch file "${patch.path}"`, {
+        cause: error,
+      })
+    }
+  }
+  return document
+}
+
 async function readPatch(path: string): Promise<Operation[] | undefined> {
   if (!(await fileExists(path))) {
     return undefined
@@ -36,15 +80,21 @@ async function readPatch(path: string): Promise<Operation[] | undefined> {
   return JSON.parse(await readFile(path, 'utf8')) as Operation[]
 }
 
-export async function readPatchedSchema<T>(path: string, url: string, patchFile: string): Promise<T> {
-  const schemaText = await readSchema(path, url)
+async function readPatches(
+  schemaPath: string,
+): Promise<Array<{ path: string; operations: Operation[] }>> {
+  const patchFiles = await listPatchFiles(schemaPath)
+  const patches: Array<{ path: string; operations: Operation[] }> = []
 
-  const upstreamDoc = JSON.parse(schemaText) as T
-  const patch = await readPatch(patchFile)
+  for (const patchPath of patchFiles) {
+    const operations = await readPatch(patchPath)
 
-  return patch === undefined
-      ? upstreamDoc
-      : jsonpatch.applyPatch(structuredClone(upstreamDoc), patch, true, false).newDocument
+    if (operations !== undefined) {
+      patches.push({ path: patchPath, operations })
+    }
+  }
+
+  return patches
 }
 
 async function readSchema(path: string, url: string): Promise<string> {

@@ -1,0 +1,51 @@
+[
+  {
+    "op": "add",
+    "path": "/components/schemas/ImportExecutionStatus",
+    "value": {
+      "type": "string",
+      "description": "Import execution status values returned by the Assets REST API getExecutionStatus endpoint.",
+      "enum": [
+        "INGESTING",
+        "PROCESSING",
+        "DONE",
+        "CANCELLED"
+      ]
+    }
+  },
+  {
+    "op": "add",
+    "path": "/components/schemas/ImportExecutionStatusResponse",
+    "value": {
+      "title": "ImportExecutionStatusResponse",
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/ImportExecutionStatus"
+        }
+      },
+      "required": [
+        "executionId",
+        "status"
+      ]
+    }
+  },
+  {
+    "op": "add",
+    "path": "/paths/~1importsource~1{importSourceId}~1executions~1status/get/responses/200/content/application~1json/schema",
+    "value": {
+      "$ref": "#/components/schemas/ImportExecutionStatusResponse"
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/paths/~1importsource~1{importSourceId}~1executions~1status/get/responses/200/content/application~1json/example",
+    "value": {
+      "executionId": "07a58b26-e93a-49c6-9381-1fe235943018",
+      "status": "DONE"
+    }
+  }
+]

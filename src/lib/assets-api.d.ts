@@ -2318,6 +2318,16 @@ export interface components {
             };
             result: string;
         };
+        /**
+         * @description Import execution status values returned by the Assets REST API getExecutionStatus endpoint.
+         * @enum {string}
+         */
+        ImportExecutionStatus: "INGESTING" | "PROCESSING" | "DONE" | "CANCELLED";
+        /** ImportExecutionStatusResponse */
+        ImportExecutionStatusResponse: {
+            executionId: string;
+            status: components["schemas"]["ImportExecutionStatus"];
+        };
     };
     responses: {
         /** @description The system cannot fulfill the request due to validation errors. See the response body for more details. */
@@ -4118,79 +4128,11 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "status": "DONE",
-                     *       "progressResult": {
-                     *         "type": "IMPORT",
-                     *         "id": 438,
-                     *         "started": "2023-06-15T12:13:03.952+00:00",
-                     *         "ended": "2023-06-15T12:13:05.124+00:00",
-                     *         "objectSchemaId": 266,
-                     *         "result": "OK",
-                     *         "status": "FINISHED",
-                     *         "infoMessage": "No data to import",
-                     *         "jobId": "241d9437-eb25-4008-a346-8daafbb91026",
-                     *         "importSourceId": "3e9f17a6-61db-4bdd-a313-6dd38c81bfca",
-                     *         "populatedObjectTypes": [
-                     *           "Operating System",
-                     *           "Hard Drive"
-                     *         ],
-                     *         "onlyExecutedForObjectTypes": [],
-                     *         "objectTypeResultMap": {
-                     *           "2547": {
-                     *             "id": null,
-                     *             "objectTypeName": "Hard Drive",
-                     *             "objectTypeId": 2547,
-                     *             "objectsUpdated": 0,
-                     *             "objectsCreated": 1,
-                     *             "objectsIdentical": 0,
-                     *             "objectsMissingUpdated": 0,
-                     *             "objectsMissingDeleted": 0,
-                     *             "entriesInSource": 1,
-                     *             "duplicateEnries": 0,
-                     *             "emptyLabelEntries": 0,
-                     *             "emptyExternalIdEntries": 0,
-                     *             "objectsFilteredWithQlQuery": 0,
-                     *             "errorMessages": null,
-                     *             "readExternalDataTimeInMs": 221,
-                     *             "mapExternalDataTimeInMs": 0,
-                     *             "qlQueryFilteringTimeInMs": 0,
-                     *             "decidingActionsTimeInMs": 0,
-                     *             "writeInsightDataTimeInMs": 154,
-                     *             "postFunctionTimeInMs": 0,
-                     *             "executionTimeInMs": 375,
-                     *             "objectsWithUpdatedReferences": 1
-                     *           },
-                     *           "2548": {
-                     *             "id": null,
-                     *             "objectTypeName": "Operating System",
-                     *             "objectTypeId": 2548,
-                     *             "objectsUpdated": 0,
-                     *             "objectsCreated": 2,
-                     *             "objectsIdentical": 0,
-                     *             "objectsMissingUpdated": 0,
-                     *             "objectsMissingDeleted": 0,
-                     *             "entriesInSource": 2,
-                     *             "duplicateEnries": 0,
-                     *             "emptyLabelEntries": 0,
-                     *             "emptyExternalIdEntries": 0,
-                     *             "objectsFilteredWithQlQuery": 0,
-                     *             "errorMessages": null,
-                     *             "readExternalDataTimeInMs": 220,
-                     *             "mapExternalDataTimeInMs": 0,
-                     *             "qlQueryFilteringTimeInMs": 0,
-                     *             "decidingActionsTimeInMs": 0,
-                     *             "writeInsightDataTimeInMs": 266,
-                     *             "postFunctionTimeInMs": 0,
-                     *             "executionTimeInMs": 486,
-                     *             "objectsWithUpdatedReferences": 0
-                     *           }
-                     *         },
-                     *         "errorMessages": null,
-                     *         "totalNumberEntriesInImport": 3
-                     *       }
+                     *       "executionId": "07a58b26-e93a-49c6-9381-1fe235943018",
+                     *       "status": "DONE"
                      *     }
                      */
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportExecutionStatusResponse"];
                 };
             };
             /** @description Bad request */

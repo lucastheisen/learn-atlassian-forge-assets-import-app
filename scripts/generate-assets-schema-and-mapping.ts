@@ -15,14 +15,10 @@ const JSON_SCHEMA = `https://api.atlassian.com/jsm/assets/imports/external/schem
 
 const ROOT_DIR = dirname(fileURLToPath(import.meta.url))
 const schemaFile = join(ROOT_DIR, '..', 'openapi', `assets-schema-and-mapping.${SCHEMA_VERSION}.json`)
-const patchFile = join(ROOT_DIR, '..', 'openapi', `assets-schema-and-mapping.${SCHEMA_VERSION}.patch.json`)
 const outputFile = join(ROOT_DIR, '..', 'src', 'lib', 'assets-schema-and-mapping.d.ts')
 
 async function main(): Promise<void> {
-  const finalDoc = await readPatchedSchema<JSONSchema4>(
-    schemaFile,
-    JSON_SCHEMA,
-    patchFile)
+  const finalDoc = await readPatchedSchema<JSONSchema4>(schemaFile, JSON_SCHEMA)
 
   const types = await jsonSchemaToTypescript.compile(
     finalDoc,
