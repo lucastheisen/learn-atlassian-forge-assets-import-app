@@ -11,10 +11,19 @@ interface HandlerContext {
   installation: Installation
 }
 
-interface ControllerWorkItem extends Body {
+export interface ControllerWorkItem extends Body {
+  importSourceId: string
+  workspaceId: string
+  executionId: string
+  skip: number
+  limit: number
+  total: number
 }
 
-export const controllerHandler = async (_event: AsyncEvent<ControllerWorkItem>, _context: HandlerContext): Promise<void> => {
+export const controllerHandler = async (
+  _event: AsyncEvent<ControllerWorkItem>,
+  _context: HandlerContext
+): Promise<void> => {
   // Push initial work item to worker queue here
   // e.g. await workerQueue.push({ eventContext: workItem });
 
@@ -25,7 +34,7 @@ export const controllerHandler = async (_event: AsyncEvent<ControllerWorkItem>, 
   // Once work items are all complete call the Assets API to signal the completion of data submission
 
   const _id = await workerQueue.push({
-     body: {
+    body: {
       controllerId: _event.queueName,
       eventContext: {
         workId: 'your-work-id',

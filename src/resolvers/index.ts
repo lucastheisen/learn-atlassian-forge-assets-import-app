@@ -1,6 +1,7 @@
 import api, { route } from "@forge/api";
 import { kvs } from '@forge/kvs';
 import Resolver from '@forge/resolver';
+import { assetsClient } from "../lib/forge-clients"
 import { getSchemaAndMapping, mapSchema, setSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
 import { controllerQueue } from './controller-resolver';
 
@@ -26,7 +27,27 @@ export interface Config {
 export interface ImportContext {
   importId: string
   workspaceId: string
-  [key: string]: unknown
+}
+
+// json schema shows this structure in an example:
+//   @example {
+//         "links": {
+//           "submitProgress": "https://api.atlassian.com/jsm/insight/workspace/fd8d86e0-3401-40bd-adb4-bb50b8e39288/v1/importsource/4d4095c3-cb7c-4d59-9b75-a381ea4b1975/executions/07a58b26-e93a-49c6-9381-1fe235943018/progress",
+//           "submitResults": "https://api.atlassian.com/jsm/insight/workspace/fd8d86e0-3401-40bd-adb4-bb50b8e39288/v1/importsource/4d4095c3-cb7c-4d59-9b75-a381ea4b1975/executions/07a58b26-e93a-49c6-9381-1fe235943018/data",
+//           "getExecutionStatus": "https://api.atlassian.com/jsm/insight/workspace/fd8d86e0-3401-40bd-adb4-bb50b8e39288/v1/importsource/4d4095c3-cb7c-4d59-9b75-a381ea4b1975/executions/07a58b26-e93a-49c6-9381-1fe235943018/status",
+//           "cancel": "https://api.atlassian.com/jsm/insight/workspace/fd8d86e0-3401-40bd-adb4-bb50b8e39288/v1/importsource/4d4095c3-cb7c-4d59-9b75-a381ea4b1975/executions/07a58b26-e93a-49c6-9381-1fe235943018"
+//         },
+//         "result": "success"
+//       }
+// but does not flesh it out as an object so we just describe here for clarity
+export interface StartInfo {
+  links: {
+    submitProgress: string
+    submitResults: string
+    getExecutionStatus: string
+    cancel: string
+  },
+  result: string
 }
 
 resolver.define('getConfig', async(req) => {
@@ -119,6 +140,11 @@ resolver.define('setConfig', async(req) => {
 
 export const configKey = (workspaceId: string, importId: string) => `assets-import-config:${workspaceId}:${importId}`;
 
+export interface StatusInfo {
+  executionId: string
+  status: string
+}
+
 export const handler = resolver.getDefinitions();
 export const onDeleteImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got deleted`);
@@ -134,22 +160,98 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
   );
   console.log('import with id ', `${context.importId} got started`);
 
-  // Call Assets API here to mark import as started
-  const resp = await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${context.workspaceId}/v1/importsource/${context.importId}`,
-      {
-        method: "GET",
-      }
-    );
-  console.log("import source is:")
-  console.log(await resp.json())
-  console.log("the end")
+  const client = assetsClient(context.workspaceId);
+
+  const statusResp = await client.GET(
+    "/importsource/{importSourceId}/executions/status",
+    {
+        headers: {
+          "Accept": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: context.importId,
+          },
+        },
+    });
+  if (statusResp.error) {
+    throw new Error(`unable to get status for execution: ${JSON.stringify(statusResp.error)}`);
+  }
+  if (!statusResp.data) {
+    throw new Error(`data empty status for execution`);
+  }
+
+  const statusInfo = statusResp.data as StatusInfo;
+  console.log('BEFORE STARTING, import with id has latest execution: ', statusInfo);
+
+  const { data, error } = await client.POST(
+    "/importsource/{importSourceId}/executions",
+    {
+        headers: {
+          "Accept": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: context.importId,
+          },
+        },
+    });
+  if (error) {
+    throw new Error(`unable to create execution: ${JSON.stringify(error)}`);
+  }
+  if (!data) {
+    throw new Error(`data empty execution`);
+  }
+
+  const startInfo = data as StartInfo;
+  const idsMatch = new URL(startInfo.links.submitProgress).pathname.match(
+    /\/workspace\/(?<workspaceId>[^/]+)\/v1\/importsource\/(?<importSourceId>[^/]+)\/executions\/(?<executionId>[^/]+)\//
+  );
+  if (
+      !idsMatch?.groups?.workspaceId
+      || !idsMatch?.groups?.importSourceId
+      || !idsMatch?.groups?.executionId) {
+    throw new Error(`invalid execution submitProgress link: ${startInfo.links.submitProgress}`);
+  }
+  const { workspaceId, importSourceId, executionId } = idsMatch.groups;
 
   // Push event onto controller queue to start data ingestion process
-  const id = await controllerQueue.push({ body: { eventContext: { importConfigurationId: context.importId } } });
-  console.log(`Pushed queueControllerEvent with id ${id}`);
+  const job = await controllerQueue.push(
+    {
+      body: {
+        importSourceId: importSourceId,
+        workspaceId: workspaceId,
+        executionId: executionId,
+        skip: 0,
+        limit: 30,
+        total: 0,
+      }
+    });
+  console.log(`Pushed queueControllerEvent with id ${job.jobId}`);
+
+  setJobId(importSourceId, job.jobId)
+
+  const statusRespAfter = await client.GET(
+    "/importsource/{importSourceId}/executions/status",
+    {
+        headers: {
+          "Accept": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: context.importId,
+          },
+        },
+    });
+  if (statusRespAfter.error) {
+    throw new Error(`unable to get status for execution: ${JSON.stringify(statusRespAfter.error)}`);
+  }
+  if (!statusRespAfter.data) {
+    throw new Error(`data empty status for execution`);
+  }
+
+  const statusInfoAfter = statusRespAfter.data as StatusInfo;
+  console.log('AFTER STARTING, import with id has latest execution: ', statusInfoAfter);
 
   return {
     result: 'start import'
@@ -159,13 +261,78 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
 export const stopImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got stopped`);
 
+  const client = assetsClient(context.workspaceId);
+  const statusResp = await client.GET(
+    "/importsource/{importSourceId}/executions/status",
+    {
+        headers: {
+          "Accept": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: context.importId,
+          },
+        },
+    });
+  if (statusResp.error) {
+    throw new Error(`unable to get status for execution: ${JSON.stringify(statusResp.error)}`);
+  }
+  if (!statusResp.data) {
+    throw new Error(`data empty status for execution`);
+  }
+
+  const statusInfo = statusResp.data as StatusInfo;
+  console.log('import with id has latest execution: ', statusInfo);
+
+  const { error } = await client.DELETE(
+    "/importsource/{importSourceId}/executions/{importExecutionId}",
+    {
+        headers: {
+          "Accept": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: context.importId,
+            importExecutionId: statusInfo.executionId,
+          },
+        },
+    });
+  if (error) {
+    throw new Error(`unable to delete execution: ${JSON.stringify(error)}`);
+  }
+
   return {
     result: 'stop import'
   };
 };
 
-export const importStatus = async (context: ImportContext) => {
+export const importStatus = async (context: ImportContext, ...args: unknown[]) => {
+  console.debug(
+    `import status: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
+  );
   const status = 'READY';
+
+  //const client = assetsClient(context.workspaceId);
+  //const { data, error } = await client.POST(
+  //  "/importsource/{importSourceId}/executions",
+  //  {
+  //      headers: {
+  //        "Accept": "application/json",
+  //      },
+  //      params: {
+  //        path: {
+  //          importSourceId: context.importId,
+  //        },
+  //      },
+  //  });
+  //if (error) {
+  //  throw new Error(`unable to create execution: ${JSON.stringify(error)}`);
+  //}
+  //if (!data) {
+  //  throw new Error(`data empty execution`);
+  //}
+
+  //const startInfo = data as StartInfo;
 
   console.log(`import with id `, `${context.importId} sending import progress ${status}`);
 
@@ -173,3 +340,19 @@ export const importStatus = async (context: ImportContext) => {
     status: status
   };
 };
+
+const deleteJobId = async (importSourceId: string) => {
+  return await kvs.delete(jobKey(importSourceId));
+}
+
+const getJobId = async (importSourceId: string) => {
+  return await kvs.get<string>(jobKey(importSourceId));
+}
+
+const setJobId = async (importSourceId: string, jobId: string) => {
+  await kvs.set(jobKey(importSourceId), jobId);
+}
+
+const jobKey = (importSourceId: string) => {
+  return `import:${importSourceId}:jobId`
+}

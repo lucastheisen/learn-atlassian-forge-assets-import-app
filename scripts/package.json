@@ -1,0 +1,17 @@
+{
+  "name": "assets-import-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:assets-api": "tsx generate-assets-api.ts",
+    "generate:assets-schema-and-mapping": "tsx generate-assets-schema-and-mapping.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fast-json-patch": "^3.1.1",
+    "json-schema-to-typescript": "^15.0.4",
+    "openapi-typescript": "^7.13.0",
+    "tsx": "^4.22.0",
+    "typescript": "^5.9.0"
+  }
+}

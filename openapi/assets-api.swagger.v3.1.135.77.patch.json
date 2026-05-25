@@ -1,0 +1,43 @@
+[
+  {
+    "op": "add",
+    "path": "/components/schemas/StartInfo",
+    "value": {
+      "type": "object",
+      "required": ["links", "result"],
+      "properties": {
+        "links": {
+          "type": "object",
+          "required": [
+            "submitProgress",
+            "submitResults",
+            "getExecutionStatus",
+            "cancel"
+          ],
+          "properties": {
+            "submitProgress": { "type": "string" },
+            "submitResults": { "type": "string" },
+            "getExecutionStatus": { "type": "string" },
+            "cancel": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "op": "add",
+    "path": "/paths/~1importsource~1{importSourceId}~1executions/post/responses/200/content",
+    "value": {
+      "application/json": {
+        "schema": {
+          "$ref": "#/components/schemas/StartInfo"
+        }
+      }
+    }
+  }
+]
