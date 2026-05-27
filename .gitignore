@@ -54,3 +54,4 @@ Thumbs.db
 token.txt
 *.token
 users.yml
+user_sync.sh
