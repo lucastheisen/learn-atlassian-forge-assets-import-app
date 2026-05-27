@@ -57,3 +57,106 @@ $ curl --header "Accept: application/json" --header "Content-Type: application/j
 code: 401
 message: Unauthorized
 ```
+
+## Updating reference to atlassian user
+
+It appears [atlassian user does reference attributes do not show up in the importsource schema-and-mapping](https://community.developer.atlassian.com/t/how-can-i-get-a-user-reference-attribute-to-synchronize-from-an-incoming-mapping-via-email-address/100676), so we need to do that as an additional step.
+[This post](https://community.developer.atlassian.com/t/setting-references-for-assets-via-rest-api-in-jira/70715) indicates that this should be possible, but also makes it clear that the expected value is not always clear.
+
+And this seems to work:
+
+```console
+ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
+$ cat /tmp/setuser.yml
+---
+attributes:
+  - objectTypeAttributeId: "214"
+    objectAttributeValues:
+      - value: "557058:9c189978-a6aa-4166-a4c7-7067bdaf3809"
+objectTypeId: "37"
+
+
+ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
+$ ./curl_atlassian.sh     assets/object/1     --silent     --request PUT --data @<(clconf --yaml /tmp/setuser.yml getv / --output json)     | clconf --pipe
+_links:
+  self: https://api.atlassian.com/jsm/assets/workspace/3380a6d2-092b-493a-a9dc-cf0c5197e23b/v1/object/1
+attributes:
+- globalId: 3380a6d2-092b-493a-a9dc-cf0c5197e23b:108
+  id: "108"
+  objectAttributeValues:
+  - displayValue: Lucas Theisen
+...
+```
+
+The problem is how to get the _key_ for a given user by email.
+This _key_ appears to be the `accountId` from this search result:
+
+```console
+./curl_atlassian.sh jira/user/search?query=ltheisen%40mit | clconf --pipe
+```
+
+But as [this community post](https://community.developer.atlassian.com/t/api-to-get-user-exactly-by-email/93265) points out:
+
+> ... this endpoint searches non-strictly and tries to suggest the most suitable options ...
+
+So it looks like the mapping has to be done using `asApp` and done in two parts:
+
+1. Lookup by email to get all matching account ids
+1. Lookup email for all matching account ids to confirm exact match
+
+The basic approach is outlined by this (working) web trigger:
+
+```javascript
+import api, { route } from '@forge/api';
+
+/**
+ * @param {import('@forge/api').WebTriggerRequest} event
+ * @param {import('@forge/api').WebTriggerContext} context
+ * @returns {Promise<import('@forge/api').WebTriggerResponse>}
+ */
+exports.runAsync = async (event, context) => {
+  // https://developer.atlassian.com/platform/forge/apis-reference/fetch-api-product.requestjira/
+  const userSearchParams = new URLSearchParams({
+    query: "l",
+  });
+  const userSearchResponse = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/user/search?${userSearchParams}`,
+      {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+  console.log('status:', userSearchResponse.status);
+  console.log('ok:', userSearchResponse.ok);
+  const users = await userSearchResponse.json();
+
+  console.log('users:', JSON.stringify(users, null, 2));
+  const accountIds = users.map((user) => user.accountId);
+
+  const emailLookupParams = new URLSearchParams();
+  accountIds.forEach(val => {
+    emailLookupParams.append('accountId', val);
+  });
+  const emailLookupResponse = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/user/email/bulk?${emailLookupParams}`,
+      {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+  console.log('status:', emailLookupResponse.status);
+  console.log('ok:', emailLookupResponse.ok);
+  const emailLookup = await emailLookupResponse.json();
+  console.log('emailLookup:', JSON.stringify(emailLookup, null, 2));
+
+  return {
+    outputKey: "status-ok"
+  };
+};
+```

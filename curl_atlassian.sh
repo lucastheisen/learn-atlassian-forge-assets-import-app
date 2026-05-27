@@ -67,6 +67,15 @@ function curl_assets {
   esac
 }
 
+function curl_jira {
+  # https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#about
+  local path_and_query="$1"
+  local curl_args=("${@:2}")
+
+  local url="$(jira_url "${path_and_query}")"
+  run_curl "$(auth_basic)" "${url}" "${curl_args[@]}"
+}
+
 function curl_assets_importsource {
   run_curl "$(printf "Authorization: Bearer %s" "${ASSETS_TOKEN}")" "$@"
 }
@@ -74,6 +83,13 @@ function curl_assets_importsource {
 function error_exit {
   printf "$1"
   exit "${2:-1}"
+}
+
+function jira_url {
+  local path_and_query=$1
+  printf 'https://%s.atlassian.net/rest/api/3/%s' \
+    "${ATLASSIAN_SITE}" \
+    "${path_and_query}"
 }
 
 function run_curl {
@@ -110,6 +126,7 @@ function main {
   local path_and_query="${1#*/}"
   case "${target}" in
     assets) curl_assets "${path_and_query}" "${@:2}";;
+    jira) curl_jira "${path_and_query}" "${@:2}";;
     *) error_exit "unknown api [${target}]"
   esac
 }

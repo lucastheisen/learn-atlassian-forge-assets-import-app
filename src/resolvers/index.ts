@@ -120,6 +120,7 @@ resolver.define('setConfig', async(req) => {
 export const configKey = (workspaceId: string, importId: string) => `assets-import-config:${workspaceId}:${importId}`;
 
 export const handler = resolver.getDefinitions();
+
 export const onDeleteImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got deleted`);
 
@@ -128,6 +129,8 @@ export const onDeleteImport = async (context: ImportContext) => {
   };
 };
 
+// This begins an import, and is triggered by the _Import data_ button of an
+// import instance in the _Schema settings_ -> _Import_ tab.
 export const startImport = async (context: ImportContext, ...args: unknown[]) => {
   console.debug(
     `start import: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
@@ -191,7 +194,7 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
 
   setJobId(importSourceId, job.jobId)
 
-  const statusRespAfter = await client.GET(
+  const statusAfter = await unwrap(client.GET(
     "/importsource/{importSourceId}/executions/status",
     {
         headers: {
@@ -202,21 +205,15 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
             importSourceId: context.importId,
           },
         },
-    });
-  if (statusRespAfter.error) {
-    throw new Error(`unable to get status for execution: ${JSON.stringify(statusRespAfter.error)}`);
-  }
-  if (!statusRespAfter.data) {
-    throw new Error(`data empty status for execution`);
-  }
-
-  console.log('AFTER STARTING, import with id has latest execution: ', statusRespAfter.data);
+    }));
+  console.log('AFTER STARTING, import with id has latest execution: ', statusAfter);
 
   return {
     result: 'start import'
   };
 };
 
+// This cancels the current execution of an import.
 export const stopImport = async (context: ImportContext) => {
   console.log('import with id ', `${context.importId} got stopped`);
 
@@ -254,6 +251,8 @@ export const stopImport = async (context: ImportContext) => {
   };
 };
 
+// This is the status of an import itself, NOT the status of an _execution_
+// of an import.
 export const importStatus = async (context: ImportContext, ...args: unknown[]) => {
   console.debug(
     `import status: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
