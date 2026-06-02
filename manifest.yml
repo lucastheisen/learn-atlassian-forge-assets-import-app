@@ -1,46 +1,50 @@
+---
+app:
+  id: ari:cloud:ecosystem::app/a830c4dc-a700-401b-96af-e97aeb4b159a
+  runtime:
+    architecture: arm64
+    memoryMB: 256
+    name: nodejs24.x
 modules:
+  consumer:
+    - function: workerQueueFunction
+      key: assets-import-app-uk2-assets-imports-tutorial-worker-queue-consumer
+      queue: worker-queue
+    - function: controllerQueueFunction
+      key: assets-import-app-uk2-assets-imports-tutorial-controller-queue-consumer
+      queue: controller-queue
+  function:
+    - handler: index.handler
+      key: resolver
+    - handler: index.onDeleteImport
+      key: onDeleteImport
+    - handler: index.startImport
+      key: startImport
+    - handler: index.stopImport
+      key: stopImport
+    - handler: index.importStatus
+      key: importStatus
+    - handler: index.workerHandler
+      key: workerQueueFunction
+    - handler: index.controllerHandler
+      key: controllerQueueFunction
   jiraServiceManagement:assetsImportType:
-    - key: lucas-laptop-assets-import-app-hello-world-import-type
-      resource: main
-      resolver:
-        function: resolver
-      render: native
-      title: lucas-laptop-assets-import-app
-      description: Lucas Laptop - This is a Hello World app.
+    - description: Lucas Laptop - This is a Hello World app.
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      importStatus:
+        function: importStatus
+      key: lucas-laptop-assets-import-app-hello-world-import-type
       onDeleteImport:
         function: onDeleteImport
+      render: native
+      resolver:
+        function: resolver
+      resource: main
       startImport:
         function: startImport
       stopImport:
         function: stopImport
-      importStatus:
-        function: importStatus
-  function:
-    - key: resolver
-      handler: index.handler
-    - key: onDeleteImport
-      handler: index.onDeleteImport
-    - key: startImport
-      handler: index.startImport
-    - key: stopImport
-      handler: index.stopImport
-    - key: importStatus
-      handler: index.importStatus
-    - key: workerQueueFunction
-      handler: index.workerHandler
-    - key: controllerQueueFunction
-      handler: index.controllerHandler
-  consumer:
-    - key: assets-import-app-uk2-assets-imports-tutorial-worker-queue-consumer
-      queue: worker-queue
-      function: workerQueueFunction
-    - key: assets-import-app-uk2-assets-imports-tutorial-controller-queue-consumer
-      queue: controller-queue
-      function: controllerQueueFunction
-resources:
-  - key: main
-    path: src/frontend/index.tsx
+      title: lucas-laptop-assets-import-app
 permissions:
   content:
     scripts:
@@ -56,9 +60,6 @@ permissions:
     - read:cmdb-type:jira
     - write:cmdb-object:jira
     - storage:app
-app:
-  runtime:
-    name: nodejs24.x
-    memoryMB: 256
-    architecture: arm64
-  id: ari:cloud:ecosystem::app/a830c4dc-a700-401b-96af-e97aeb4b159a
+resources:
+  - key: main
+    path: src/frontend/index.tsx
