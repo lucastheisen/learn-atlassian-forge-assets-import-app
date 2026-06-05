@@ -1,6 +1,9 @@
 import type { Installation } from '@forge/api/out/api/runtime';
 import { type AsyncEvent, Queue } from '@forge/events';
 import { Body } from '@forge/events/out/types';
+import { getData, ImportManifest } from '../lib/kv-data';
+import { type AssetsClient, assetsClient, unwrap } from '../lib/forge-clients';
+import { ModalBody } from '@forge/react';
 
 // The responsibility of the worker queue is to fetch data from the external system
 // and submit that data to CMDB. Since data most likely will be fetched in batches,
@@ -13,10 +16,11 @@ import { Body } from '@forge/events/out/types';
 export const workerQueue = new Queue<WorkItem>({ key: 'worker-queue' });
 
 interface WorkItem extends Body {
-  eventContext: WorkDetail
-}
-interface WorkDetail {
-  workId: string
+  importSourceId: string
+  workspaceId: string
+  executionId: string
+  manifest: ImportManifest
+  index: number
 }
 
 // the only place i could find installContext next to installation:
@@ -100,9 +104,58 @@ export const workerHandler = async (event: AsyncEvent<WorkItem>, context: Handle
     `Entering worker-queue-listener with event: ${JSON.stringify(event, null, 2)} and context: ${JSON.stringify(context, null, 2)}`
   );
 
-  // Fetch data from external system here
-  // Update work items according to how much data is left to be fetched
-  // And push to worker queue again if there is more data to be fetched
-  // eg. await workerQueue.push({ eventContext: updatedWorkItem });
-  return Promise.resolve();
+  const data = await getData(event.body.manifest, event.body.index)
+  const lastBatch = event.body.index === (event.body.manifest.totals.keys - 1)
+
+  const client = assetsClient(event.body.workspaceId);
+  // CODE_REVIEW_CATCH_ME: update json to add type to body
+  await unwrap(client.POST(
+    "/importsource/{importSourceId}/executions/{importExecutionId}/data",
+    {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: event.body.importSourceId,
+            importExecutionId: event.body.executionId,
+          },
+        },
+        body: {
+          data: data,
+          clientGeneratedId: "",
+          completed: lastBatch,
+        },
+    }));
+
+  if (!lastBatch) {
+    // CODE_REVIEW_CATCH_ME: patch openapi json to add type to body
+    const progress = {
+      total: event.body.manifest.totals.keys,
+      processed: event.body.index + 1,
+    };
+    // dont unwrap, because unrap converts error object to thrown error which
+    // would stop the import, and progress update is simply best effort
+    client.PUT(
+      "/importsource/{importSourceId}/executions/{importExecutionId}/progress",
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        params: {
+          path: {
+            importSourceId: event.body.importSourceId,
+            importExecutionId: event.body.executionId,
+          },
+        },
+        body: progress,
+      });
+
+    const _id = await workerQueue.push({
+      body: {
+        ...event.body,
+        index: event.body.index + 1,
+      },
+    });
+  }
 }

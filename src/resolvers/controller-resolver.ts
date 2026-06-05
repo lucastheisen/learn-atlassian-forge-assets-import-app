@@ -2,6 +2,8 @@ import type { Installation } from '@forge/api/out/api/runtime';
 import { type AsyncEvent, Queue } from '@forge/events';
 import type { Body } from '@forge/events/out/types';
 import { workerQueue } from './worker-resolver';
+import { ImportManifest } from '../lib/kv-data';
+import { eventLoopUtilization } from 'node:perf_hooks';
 
 export const controllerQueue = new Queue<ControllerWorkItem>({ key: 'controller-queue' });
 
@@ -15,13 +17,12 @@ export interface ControllerWorkItem extends Body {
   importSourceId: string
   workspaceId: string
   executionId: string
-  skip: number
-  limit: number
-  total: number
+  manifest: ImportManifest
+  index: number
 }
 
 export const controllerHandler = async (
-  _event: AsyncEvent<ControllerWorkItem>,
+  event: AsyncEvent<ControllerWorkItem>,
   _context: HandlerContext
 ): Promise<void> => {
   // Push initial work item to worker queue here
@@ -34,11 +35,7 @@ export const controllerHandler = async (
   // Once work items are all complete call the Assets API to signal the completion of data submission
 
   const _id = await workerQueue.push({
-    body: {
-      controllerId: _event.queueName,
-      eventContext: {
-        workId: 'your-work-id',
-      },
-    },
+    // for now they are the same shape, so just pass it along
+    body: event.body,
   });
 }

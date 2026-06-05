@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "generate:assets-api": "tsx generate-assets-api.ts",
-    "generate:assets-schema-and-mapping": "tsx generate-assets-schema-and-mapping.ts"
+    "generate:assets-schema-and-mapping": "tsx generate-assets-schema-and-mapping.ts",
+    "generate:secret-key": "tsx generate-secret-key.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "fast-json-patch": "^3.1.1",
+    "jose": "^6.2.3",
     "json-schema-to-typescript": "^15.0.4",
     "openapi-typescript": "^7.13.0",
     "tsx": "^4.22.0",

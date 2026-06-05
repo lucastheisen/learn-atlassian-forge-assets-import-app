@@ -8,6 +8,8 @@ import createClient from "openapi-fetch";
 
 import type { paths as assetsPaths } from './assets-api';
 
+export type AssetsClient = ReturnType<typeof createClient<assetsPaths>>;
+
 type OpenApiResult =
   | {
       data: unknown
@@ -56,7 +58,8 @@ const asAppJiraFetch = async (input: Request): Promise<Response> => {
     opts.body = await input.text();
   }
 
-  console.log(`as app fetch route <${path}> with options <${JSON.stringify(opts)}>`);
+  //CODE_REVIEW_CATCH_ME: this should be replaced by something MUCH less verbose
+  console.debug(`as app fetch route <${path}> with options <${JSON.stringify(opts)}>`);
   const apiResponse: Promise<APIResponse> = api
     .asApp()
     .requestJira(assumeTrustedRoute(path), opts);
@@ -64,7 +67,7 @@ const asAppJiraFetch = async (input: Request): Promise<Response> => {
   return apiResponse as Promise<Response>;
 };
 
-export const assetsClient = (workspaceId: string) => {
+export const assetsClient = (workspaceId: string): AssetsClient => {
   const path = route`/jsm/assets/workspace/${workspaceId}/v1`.value;
   const client = createClient<assetsPaths>({
     // only the path matters here because its all we use in the asAppJiraFetch

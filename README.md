@@ -1,46 +1,8 @@
-# Forge Hello World
-
-This project contains a Forge app written in Javascript that displays "Hello, World!" and ImportId in the "Configure App" modal for 3rd Party Import Structures. 
-It also outlines how to make use of Forge's Async Events API to import 3rd party data into Assets by setting up a controller and worker queue for data ingestion. 
-
-See [developer.atlassian.com/platform/forge/assets-import-app/](https://developer.atlassian.com/platform/forge/assets-import-app) for documentation and tutorial of this Forge Template, including the [documentation of Asset APIs](https://developer.atlassian.com/cloud/assets/). 
-
-Also see [Forge Async Events API Diagram](Https://dac-static.atlassian.com/platform/forge/images/assets-import-async-events-api-example.png?_v=1.5800.340) for a visual representation of the Async Events API.
-With the Controller Queue a reference to `controller-resolver.js` and Worker Queue in `worker-resolver.js`
-
-## Requirements
-
-See [Set up Forge](https://developer.atlassian.com/platform/forge/set-up-forge/) for instructions to get set up.
-
-## Quick start
-
-- Modify your app frontend by editing the `src/frontend/index.jsx` file.
-
-- Modify your app backend by editing the `src/resolvers/index.js` file to define resolver functions. See [Forge resolvers](https://developer.atlassian.com/platform/forge/runtime-reference/custom-ui-resolver/) for documentation on resolver functions.
-
-- Build and deploy your app by running:
-```
-forge deploy
-```
-
-- Install your app in an Atlassian site by running:
-```
-forge install
-```
-
-- Develop your app by running `forge tunnel` to proxy invocations locally:
-```
-forge tunnel
-```
-
-### Notes
-- Use the `forge deploy` command when you want to persist code changes.
-- Use the `forge install` command when you want to install the app on a new site.
-- Once the app is installed on a site, the site picks up the new app changes you deploy without needing to rerun the install command.
+# User Asset Synchronization
 
 ## Design
 
-This seems silly because it still requires additional work unless we have direct access to the FAA data (edge proxy).
+This seems silly because it still requires additional work unless we have direct access to the user data (would require edge proxy or some other access approach).
 This approach does not change the need for something extra to associate asset to user (reference attribute).
 So we would still need the controller queue to watch for completion of import then re-process every user asset looking for matching user to update reference with.
 This bolt on extra work could be performed via webhook -> queue directly without the import stuff.

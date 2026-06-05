@@ -4,6 +4,7 @@ import Resolver from '@forge/resolver';
 import { assetsClient, unwrap } from "../lib/forge-clients"
 import { getSchemaAndMapping, mapSchema, setSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
 import { controllerQueue } from './controller-resolver';
+import { getLatestManifest } from "../lib/kv-data";
 
 const resolver = new Resolver();
 
@@ -137,6 +138,11 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
   );
   console.log('import with id ', `${context.importId} got started`);
 
+  const manifest = await getLatestManifest()
+  if (manifest === undefined) {
+    throw new Error("no import manifest found");
+  }
+
   const client = assetsClient(context.workspaceId);
 
   const statusBefore = await unwrap(client.GET(
@@ -152,7 +158,7 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
         },
     }));
 
-  console.log('BEFORE STARTING, import with id has latest execution: ', statusBefore);
+  console.log('BEFORE STARTING, import with id has latest execution: ', statusBefore, 'with manifest: ', manifest);
 
   const startInfo = await unwrap(client.POST(
     "/importsource/{importSourceId}/executions",
@@ -185,9 +191,8 @@ export const startImport = async (context: ImportContext, ...args: unknown[]) =>
         importSourceId: importSourceId,
         workspaceId: workspaceId,
         executionId: executionId,
-        skip: 0,
-        limit: 30,
-        total: 0,
+        manifest: manifest,
+        index: 0,
       }
     });
   console.log(`Pushed queueControllerEvent with id ${job.jobId}`);

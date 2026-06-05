@@ -28,8 +28,10 @@ modules:
       key: workerQueueFunction
     - handler: index.controllerHandler
       key: controllerQueueFunction
+    - handler: index.webtriggerPrune
+      key: webtriggerPrune
   jiraServiceManagement:assetsImportType:
-    - description: Lucas Laptop - This is a Hello World app.
+    - description: User import.
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
       importStatus:
         function: importStatus
@@ -45,6 +47,28 @@ modules:
       stopImport:
         function: stopImport
       title: lucas-laptop-assets-import-app
+  webtrigger:
+    - function: webtriggerPrune
+      key: lucas-laptop-assets-import-app-webtrigger-prune
+      response:
+        outputs:
+          - body: '{"status": "ok"}'
+            contentType: application/json
+            key: status-ok
+            statusCode: 200
+          - body: '{"status": "error"}'
+            contentType: text/plain
+            key: status-error-unauthorized
+            statusCode: 401
+          - body: '{"status": "error"}'
+            contentType: text/plain
+            key: status-error-forbidden
+            statusCode: 403
+          - body: '{"status": "error"}'
+            contentType: text/plain
+            key: status-error-internal-server-error
+            statusCode: 500
+        type: static
 permissions:
   content:
     scripts:
