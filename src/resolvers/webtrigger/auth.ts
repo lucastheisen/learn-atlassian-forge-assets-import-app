@@ -2,8 +2,9 @@
 //   https://github.com/ibuchanan/explore-forge-jira-custom-api/blob/6fa813cb61c3d2faa6eebe7e4eba24a804b5955b/apps/webtrigger/src/workitem/auth.ts
 import { createSecretKey } from "node:crypto";
 import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
-import { isJOSEError, jwtVerify, type JWTPayload } from "../lib/jose";
-import type { StaticWebTriggerResponse } from "./webtrigger";
+import { isJOSEError, jwtVerify, type JWTPayload } from "../../lib/jose";
+import type { StaticWebTriggerResponse } from ".";
+import { BadRequestError, ForbiddenError, InternalServerError, UnauthorizedError } from "./common";
 
 const CLOCK_SKEW_LEEWAY_SECONDS = 30;
 const EXPECTED_AUDIENCE = "write:workitem:custom";
@@ -26,35 +27,7 @@ type WebTriggerWithAuthResponse<R extends StaticWebTriggerResponse> =
   | R
   | WebTriggerAuthFailureResponse;
 
-class BadRequestError extends Error {
-  constructor(message = "BadReqeustError") {
-    super(message);
-    this.name = "BadReqeustError";
-  }
-}
-
-class InternalServerError extends Error {
-  constructor(message = "InternalServerError") {
-    super(message);
-    this.name = "InternalServerError";
-  }
-}
-
-class ForbiddenError extends Error {
-  constructor(message = "Forbidden") {
-    super(message);
-    this.name = "ForbiddenError";
-  }
-}
-
-class UnauthorizedError extends Error {
-  constructor(message = "Unauthorized") {
-    super(message);
-    this.name = "UnauthorizedError";
-  }
-}
-
-const verifyBearerToken = async (
+export const verifyBearerToken = async (
   headers:  WebTriggerRequest["headers"] | undefined,
 ): Promise<JWTPayload> => {
   const secret = process.env[SECRET_ENV_VAR];

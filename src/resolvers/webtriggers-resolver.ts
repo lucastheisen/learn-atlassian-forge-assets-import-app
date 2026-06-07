@@ -1,10 +1,13 @@
 import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
 import { prune } from "../lib/kv-data";
-import { withAuth } from "./webtrigger-auth";
-import { StaticWebTriggerResponse } from "./webtrigger";
-import { eventLoopUtilization } from "node:perf_hooks";
+import { verifyBearerToken, withAuth } from "./webtrigger/auth";
 import kvs from "@forge/kvs";
-import { BatchDeleteItem } from "@forge/kvs/out/interfaces/kvs-api";
+import { execute, parse, StaticWebTriggerResponse } from "./webtrigger";
+import { ZodError } from "zod";
+
+type WebTriggerAction = 
+  | WebTriggerPrune
+  | WebTriggerKvsDelete
 
 interface WebTriggerPrune {
   type: "prune"
@@ -16,11 +19,33 @@ interface WebTriggerKvsDelete {
   keys: string[]
 }
 
-type WebTriggerAction = WebTriggerPrune | WebTriggerKvsDelete
+type WebTriggerStaticHandler = (
+  event: WebTriggerRequest,
+  context: WebTriggerContext,
+) => Promise<StaticWebTriggerResponse>
+
+export const webtriggerDispatch: WebTriggerStaticHandler = async (event, context) => {
+  try {
+    return await execute(
+      parse(event.body),
+      await verifyBearerToken(event.headers),
+      event,
+      context)
+  } catch (err) {
+    if (err instanceof ZodError) {
+      console.debug("action request parse failed: ", err);
+      return { outputKey: "status-error-bad-request" };
+    }
+    console.debug("action failed: ", err);
+    return { outputKey: "status-error-internal-server-error" };
+  }
+}
+
+export const webtriggerPrune = webtriggerDispatch
 
 // CODE_REVIEW_CATCH_ME: this doesnt need context or event so probably should be
 // remvoed, but for now, nope
-export const webtriggerPrune = withAuth(
+export const webtriggerPruneOld: WebTriggerStaticHandler = withAuth(
   async (
     event: WebTriggerRequest,
     _context: WebTriggerContext,
