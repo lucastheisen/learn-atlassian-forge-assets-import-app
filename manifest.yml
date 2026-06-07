@@ -58,6 +58,10 @@ modules:
             statusCode: 200
           - body: '{"status": "error"}'
             contentType: text/plain
+            key: status-error-bad-request
+            statusCode: 400
+          - body: '{"status": "error"}'
+            contentType: text/plain
             key: status-error-unauthorized
             statusCode: 401
           - body: '{"status": "error"}'
@@ -69,6 +73,7 @@ modules:
             key: status-error-internal-server-error
             statusCode: 500
         type: static
+      urlFormat: v2
 permissions:
   content:
     scripts:

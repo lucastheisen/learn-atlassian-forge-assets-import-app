@@ -1,3 +1,3 @@
-export type WebTriggerResponse<K extends string = string> = {
+export type StaticWebTriggerResponse<K extends string = string> = {
   outputKey: K
 }

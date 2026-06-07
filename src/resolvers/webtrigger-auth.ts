@@ -3,7 +3,7 @@
 import { createSecretKey } from "node:crypto";
 import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
 import { isJOSEError, jwtVerify, type JWTPayload } from "../lib/jose";
-import type { WebTriggerResponse } from "./webtrigger";
+import type { StaticWebTriggerResponse } from "./webtrigger";
 
 const CLOCK_SKEW_LEEWAY_SECONDS = 30;
 const EXPECTED_AUDIENCE = "write:workitem:custom";
@@ -11,19 +11,27 @@ const SECRET_ENV_VAR = "FORGE_WEBTRIGGER_SECRET";
 
 type AuthzHandler = (claims: JWTPayload) => Promise<boolean>;
 
-type AuthedHandler<R extends WebTriggerResponse> = (
+type AuthedHandler<R extends StaticWebTriggerResponse> = (
   event: WebTriggerRequest,
   context: WebTriggerContext
 ) => Promise<R>;
 
-type WebTriggerAuthFailureResponse = WebTriggerResponse<
+type WebTriggerAuthFailureResponse = StaticWebTriggerResponse<
+  | "status-error-bad-request"
   | "status-error-forbidden"
   | "status-error-unauthorized"
   | "status-error-internal-server-error">
 
-type WebTriggerWithAuthResponse<R extends WebTriggerResponse> =
+type WebTriggerWithAuthResponse<R extends StaticWebTriggerResponse> =
   | R
   | WebTriggerAuthFailureResponse;
+
+class BadRequestError extends Error {
+  constructor(message = "BadReqeustError") {
+    super(message);
+    this.name = "BadReqeustError";
+  }
+}
 
 class InternalServerError extends Error {
   constructor(message = "InternalServerError") {
@@ -72,10 +80,10 @@ const verifyBearerToken = async (
       clockTolerance: CLOCK_SKEW_LEEWAY_SECONDS,
       requiredClaims: ["iss", "iat"],
     }
-  )
+  );
 }
 
-export function withAuth<R extends WebTriggerResponse>(
+export function withAuth<R extends StaticWebTriggerResponse>(
   handler: AuthedHandler<R>,
   authzHandler?: AuthzHandler,
 ) {
@@ -84,18 +92,24 @@ export function withAuth<R extends WebTriggerResponse>(
     context: WebTriggerContext,
   ): Promise<WebTriggerWithAuthResponse<R>> => {
     try {
-      const claims = await verifyBearerToken(event.headers)
+      const claims = await verifyBearerToken(event.headers);
       if (authzHandler !== undefined && !(await authzHandler(claims))) {
         return {outputKey: "status-error-forbidden"};
       }
-      return await handler(event, context)
+      return await handler(event, context);
     } catch (err) {
-      if ((err instanceof Error && await isJOSEError(err)) || err instanceof UnauthorizedError) {
-        console.log('authentication failed: ', err.message)
+      if (err instanceof BadRequestError) {
+        console.log('forbidden: ', err.message);
+        return {outputKey: "status-error-bad-request"};
+      } else if ((err instanceof Error && await isJOSEError(err)) || err instanceof UnauthorizedError) {
+        console.log('unauthorized: ', err.message);
         return {outputKey: "status-error-unauthorized"};
       } else if (err instanceof ForbiddenError) {
-        console.log('authorization failed: ', err.message)
+        console.log('forbidden: ', err.message);
         return {outputKey: "status-error-forbidden"};
+      } else if (err instanceof InternalServerError) {
+        console.log('internal server error: ', err.message);
+        return {outputKey: "status-error-internal-server-error"};
       }
 
       console.log('unknown failure: ', err)
