@@ -75,15 +75,23 @@ const nextManifestPage = async (cursor?: string): Promise<ListResult<ImportManif
   return await query.cursor(cursor).getMany<ImportManifest>();
 };
 
-export const prune = async (keepN = 0) => {
+export const prune = async (keepN = 0): Promise<void> => {
+  console.debug(`prune(${keepN})`)
   const all: KeyValue<string, ImportManifest>[] = []
   for await (const manifest of iterateManifests()) {
     all.push(manifest)
   }
 
-  const res = await kvs.batchDelete(
-    all
-      .sort((a, b) => b.value.timestamp.localeCompare(a.value.timestamp))
-      .slice(Math.max(keepN, 0))
-      .flatMap(({key, value}) => [{key}, ...value.data.map(({key}) => ({key}))]));
+  const deleteItems = all
+    .sort((a, b) => b.value.timestamp.localeCompare(a.value.timestamp))
+    .slice(Math.max(keepN, 0))
+    .flatMap(({key, value}) => [{key}, ...value.data.map(({key}) => ({key}))]);
+
+  if (deleteItems.length === 0) {
+    console.debug("nothing to delete")
+    return
+  }
+
+  const res = await kvs.batchDelete(deleteItems);
+  console.debug("delete result: ", res)
 }

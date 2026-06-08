@@ -1,4 +1,4 @@
 export { handler, onDeleteImport, startImport, stopImport, importStatus } from './resolvers';
 export { workerHandler } from './resolvers/worker-resolver'
 export { controllerHandler } from './resolvers/controller-resolver'
-export { webtriggerPrune } from './resolvers/webtriggers-resolver'
+export { webtriggerDispatch } from './resolvers/webtriggers-resolver'

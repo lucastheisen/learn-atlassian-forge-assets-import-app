@@ -1,17 +1,27 @@
 import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
-import { prune } from "../lib/kv-data";
-import { withAuth } from "./webtrigger-auth";
-import { WebTriggerResponse } from "./webtrigger";
+import { execute, parse, StaticWebTriggerResponse } from "./webtrigger";
+import { verifyBearerToken } from "./webtrigger/auth";
+import { staticWebTriggerResponseError } from "./webtrigger/common";
 
-// CODE_REVIEW_CATCH_ME: this doesnt need context or event so probably should be
-// remvoed, but for now, nope
-export const webtriggerPrune = withAuth(async (
-  _event: WebTriggerRequest,
-  _context: WebTriggerContext,
-): Promise<WebTriggerResponse<"status-ok" | "bad-request">> => {
-  //await prune(0);
-  if (false) {
-    return {outputKey: "bad-request"}
+type WebTriggerStaticHandler = (
+  event: WebTriggerRequest,
+  context: WebTriggerContext,
+) => Promise<StaticWebTriggerResponse>
+
+export const webtriggerDispatch: WebTriggerStaticHandler = async (event, context) => {
+  try {
+    const claims = await verifyBearerToken(event.headers);
+    return await execute(
+      parse(event.body),
+      claims,
+      event,
+      context);
+  } catch (err) {
+    const response = staticWebTriggerResponseError(err);
+    // we need to log all types of errors because none of the details can be
+    // exfiltrated so the logs need to be consulted for details even for user
+    // errors (like input validation)
+    console.warn(response, err instanceof Error ? err.message : err);
+    return response;
   }
-  return {outputKey: "status-ok"}
-});
+}

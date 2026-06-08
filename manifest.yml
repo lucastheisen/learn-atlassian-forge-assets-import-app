@@ -28,8 +28,8 @@ modules:
       key: workerQueueFunction
     - handler: index.controllerHandler
       key: controllerQueueFunction
-    - handler: index.webtriggerPrune
-      key: webtriggerPrune
+    - handler: index.webtriggerDispatch
+      key: webtriggerDispatch
   jiraServiceManagement:assetsImportType:
     - description: User import.
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
@@ -48,27 +48,42 @@ modules:
         function: stopImport
       title: lucas-laptop-assets-import-app
   webtrigger:
-    - function: webtriggerPrune
-      key: lucas-laptop-assets-import-app-webtrigger-prune
+    - function: webtriggerDispatch
+      key: webtrigger-dispatch
       response:
         outputs:
-          - body: '{"status": "ok"}'
+          - body: |
+              {"status": 200,"title":"success"}
             contentType: application/json
             key: status-ok
             statusCode: 200
-          - body: '{"status": "error"}'
+          - body: |
+              {"status":400,"title":"bad request"}
+            contentType: text/plain
+            key: status-error-bad-request
+            statusCode: 400
+          - body: |
+              {"status":400,"title":"your request parameters didn't validate"}
+            contentType: text/plain
+            key: status-error-bad-request-validate
+            statusCode: 400
+          - body: |
+              {"status":401,"title":"unauthorized"}
             contentType: text/plain
             key: status-error-unauthorized
             statusCode: 401
-          - body: '{"status": "error"}'
+          - body: |
+              {"status":403,"title":"forbidden"}
             contentType: text/plain
             key: status-error-forbidden
             statusCode: 403
-          - body: '{"status": "error"}'
+          - body: |
+              {"status":500,"title":"internal server error"}
             contentType: text/plain
             key: status-error-internal-server-error
             statusCode: 500
         type: static
+      urlFormat: v2
 permissions:
   content:
     scripts:
