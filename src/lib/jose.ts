@@ -43,7 +43,6 @@ interface JWTVerifyOptions {
 
 export const isJOSEError = async (err: unknown): Promise<boolean> => {
   const { errors } = await getJose();
-  console.debug("what the heck (in isJOSEError): ", err)
   return (err instanceof errors.JOSEError);
 }
 
