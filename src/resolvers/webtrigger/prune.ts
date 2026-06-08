@@ -1,15 +1,13 @@
 import z from "zod"
-import { Command } from "./common";
 import { prune } from "../../lib/kv-data"
+import { Command, staticWebTriggerResponseSuccess } from "./common";
 
 export const Prune = z.object({
   type: z.literal("prune"),
-  keepN: z.number(),
+  keepN: z.number().int().nonnegative(),
 });
 
-export const pruneCommand: Command<z.infer<typeof Prune>> = async (
-  action: ReturnType<typeof Prune["parse"]>,
-) => {
+export const pruneCommand: Command<z.infer<typeof Prune>> = async (action) => {
     await prune(action.keepN);
-    return {outputKey: "status-ok"}
+    return staticWebTriggerResponseSuccess()
 }

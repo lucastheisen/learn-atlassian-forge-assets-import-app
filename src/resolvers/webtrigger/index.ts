@@ -1,9 +1,10 @@
 import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
-import { BadRequestError, StaticWebTriggerResponse } from "./common";
-import { KvsDelete, kvsDeleteCommand } from "./kvs-delete";
-import { Prune, pruneCommand } from "./prune";
 import z from "zod"
 import { JWTPayload } from "../../lib/jose";
+import { StaticWebTriggerResponse } from "./common";
+import { BadRequestError, BadRequestValidationError } from "./errors";
+import { KvsDelete, kvsDeleteCommand } from "./kvs-delete";
+import { Prune, pruneCommand } from "./prune";
 
 export { StaticWebTriggerResponse } from "./common";
 
@@ -36,15 +37,31 @@ export const execute = (
   event: WebTriggerRequest,
   context: WebTriggerContext,
 ) => {
+  // Localized escape hatch: TypeScript cannot prove that the handler selected
+  // by `action.type` accepts this exact `action` subtype through indexed
+  // registry dispatch. This is safe as long as `action` has been validated by
+  // `WebTriggerActionZod` and `commandRegistry` remains keyed by the same
+  // discriminant values.
   return commandRegistry[action.type](action as any, claims, event, context);
 }
 
-export const parse = (json: string): WebTriggerAction => {
+export const parse = (json: string | undefined): WebTriggerAction => {
+  if (json === undefined) {
+    throw new BadRequestError("missing request body");
+  }
+
+  let parsed: unknown;
   try {
-    return WebTriggerActionZod.parse(json);
+    parsed = JSON.parse(json);
+  } catch (err) {
+    throw new BadRequestError("malformed JSON body", {cause: err});
+  }
+
+  try {
+    return WebTriggerActionZod.parse(parsed);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      throw new BadRequestError(`parse failed ${err.message}`, {cause: err})
+      throw new BadRequestValidationError(`parse failed ${err.message}`, {cause: err})
     }
     throw err
   }

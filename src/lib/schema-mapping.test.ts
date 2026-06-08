@@ -106,19 +106,19 @@ describe('Schema Mapping', () => {
     it('should unmap object type to with empty mapping to undefined', () => {
       expect(unmapSchema(mockSchema())).toStrictEqual([
         {
-          'attributeMap': new Map([
-            ['Field1', undefined],
-            ['Field2', undefined],
-            ['Field3', undefined],
-          ]),
+          'attributeMap': {
+            'Field1': [],
+            'Field2': [],
+            'Field3': [],
+          },
           'objectTypeName': 'TestType',
           'selector': undefined,
         },
         {
-          'attributeMap': new Map([
-            ['T2Field1', undefined],
-            ['T2Field2', undefined],
-          ]),
+          'attributeMap': {
+            'T2Field1': [],
+            'T2Field2': [],
+          },
           'objectTypeName': 'TestType2',
           'selector': undefined,
         },
@@ -154,19 +154,19 @@ describe('Schema Mapping', () => {
 
       expect(unmapSchema(schema)).toStrictEqual([
         {
-          'attributeMap': new Map([
-            ['Field1', ['field1']],
-            ['Field2', ['field2']],
-            ['Field3', ['field3']],
-          ]),
+          'attributeMap': {
+            'Field1': ['field1'],
+            'Field2': ['field2'],
+            'Field3': ['field3'],
+          },
           'objectTypeName': 'TestType',
           'selector': 'users',
         },
         {
-          'attributeMap': new Map([
-            ['T2Field1', undefined],
-            ['T2Field2', undefined],
-          ]),
+          'attributeMap': {
+            'T2Field1': [],
+            'T2Field2': [],
+          },
           'objectTypeName': 'TestType2',
           'selector': undefined,
         },
@@ -197,19 +197,19 @@ describe('Schema Mapping', () => {
 
       expect(unmapSchema(schema)).toStrictEqual([
         {
-          "attributeMap": new Map([
-            ["Field1", ["field1"]],
-            ["Field2", ["field2"]],
-            ["Field3", undefined],
-          ]),
+          "attributeMap": {
+            "Field1": ["field1"],
+            "Field2": ["field2"],
+            "Field3": [],
+          },
           "objectTypeName": "TestType",
           "selector": "users",
         },
         {
-          'attributeMap': new Map([
-            ['T2Field1', undefined],
-            ['T2Field2', undefined],
-          ]),
+          'attributeMap': {
+            'T2Field1': [],
+            'T2Field2': [],
+          },
           'objectTypeName': 'TestType2',
           'selector': undefined,
         },
