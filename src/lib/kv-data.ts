@@ -1,6 +1,5 @@
-import { type ListResult, WhereConditions } from '@forge/api';
-import { resetTranslationsCache } from '@forge/api/out/api/i18n';
-import { BeginsWithClause, kvs } from '@forge/kvs';
+import { kvs } from '@forge/kvs';
+import { getAllValues, iterateAllValues } from './kv-common';
 
 const manifestBase = 'import:manifest:';
 
@@ -23,11 +22,6 @@ export interface ImportManifestTotals {
   records: number
 }
 
-interface KeyValue<TKey, TValue> {
-  key: TKey
-  value: TValue
-}
-
 export const getData = async (
   manifest: ImportManifest,
   index: number
@@ -41,7 +35,7 @@ export const getData = async (
 
 export const getLatestManifest = async (): Promise<ImportManifest | undefined> => {
   let latest: ImportManifest | undefined = undefined;
-  for await (const {value: manifest} of iterateManifests()) {
+  for await (const {value: manifest} of iterateAllValues<ImportManifest>(manifestBase)) {
     if (latest === undefined || manifest.timestamp > latest.timestamp) {
       latest = manifest
     }
@@ -49,38 +43,9 @@ export const getLatestManifest = async (): Promise<ImportManifest | undefined> =
   return latest;
 }
 
-async function* iterateManifests(): AsyncGenerator<KeyValue<string, ImportManifest>> {
-  let cursor: string | undefined;
-
-  do {
-    const { results, nextCursor } = await nextManifestPage(cursor);
-
-    for (const result of results) {
-      yield result;
-    }
-
-    cursor = nextCursor;
-  } while (cursor !== undefined);
-}
-
-const nextManifestPage = async (cursor?: string): Promise<ListResult<ImportManifest>> => {
-  const query = kvs
-    .query()
-    .where('key', WhereConditions.beginsWith(manifestBase) as BeginsWithClause);
-
-  if (cursor === undefined) {
-    return await query.getMany<ImportManifest>();
-  }
-
-  return await query.cursor(cursor).getMany<ImportManifest>();
-};
-
 export const prune = async (keepN = 0): Promise<void> => {
   console.debug(`prune(${keepN})`)
-  const all: KeyValue<string, ImportManifest>[] = []
-  for await (const manifest of iterateManifests()) {
-    all.push(manifest)
-  }
+  const all = await getAllValues<ImportManifest>(manifestBase);
 
   const deleteItems = all
     .sort((a, b) => b.value.timestamp.localeCompare(a.value.timestamp))
