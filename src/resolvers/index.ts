@@ -41,8 +41,7 @@ resolver.define('getConfig', async(req) => {
     unmapSchema(
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
-        req.context.extension.importId,
-        req.context.extension.schemaId)),
+        req.context.extension.importId)),
     (_, value) => value === undefined ? null : value,
     2);
   console.log(`mapping is: ${mapping}`);
@@ -111,8 +110,7 @@ resolver.define('setConfig', async(req) => {
     mapSchema(
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
-        req.context.extension.importId,
-        req.context.extension.schemaId),
+        req.context.extension.importId),
       mapping))
 
   return { ok: true }
