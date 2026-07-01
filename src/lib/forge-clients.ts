@@ -4,7 +4,7 @@ import api, {
   type RequestInit,
   route,
 } from '@forge/api';
-import createClient from "openapi-fetch";
+import createClient from 'openapi-fetch';
 
 import type { paths as assetsPaths } from './assets-api';
 
@@ -12,19 +12,19 @@ export type AssetsClient = ReturnType<typeof createClient<assetsPaths>>;
 
 type OpenApiResult =
   | {
-      data: unknown
-      error?: never
-      response: Response
+      data: unknown;
+      error?: never;
+      response: Response;
     }
   | {
-      data?: never
-      error: unknown
-      response: Response
-    }
+      data?: never;
+      error: unknown;
+      response: Response;
+    };
 
-type OpenApiResultDataOf<TResult> = Extract<TResult, { data: unknown }>["data"]
+type OpenApiResultDataOf<TResult> = Extract<TResult, { data: unknown }>['data'];
 
-type OpenApiResultErrorOf<TResult> = Extract<TResult, { error: unknown }>["error"]
+type OpenApiResultErrorOf<TResult> = Extract<TResult, { error: unknown }>['error'];
 
 export class OpenApiResponseError<TError = unknown> extends Error {
   readonly response: Response;
@@ -35,7 +35,7 @@ export class OpenApiResponseError<TError = unknown> extends Error {
 
   constructor(response: Response, body: TError | undefined, message?: string) {
     super(message ?? `Request failed: ${response.status} ${response.statusText}`);
-    this.name = "OpenApiResponseError";
+    this.name = 'OpenApiResponseError';
     this.response = response;
     this.status = response.status;
     this.statusText = response.statusText;
@@ -47,13 +47,16 @@ export class OpenApiResponseError<TError = unknown> extends Error {
 // inspired by this comment:
 //   https://community.developer.atlassian.com/t/type-safety-for-requestproduct-api-interactions/90325/3
 const asAppJiraFetch = async (input: Request): Promise<Response> => {
-  const path = new URL(input.url).pathname;
+  const url = new URL(input.url);
+  const path = `${url.pathname}${url.search}`;
+
   const opts: RequestInit = {
     headers: {
-      ...Object.fromEntries(input.headers)
+      ...Object.fromEntries(input.headers),
     },
     method: input.method,
   };
+
   if (input.body) {
     opts.body = await input.text();
   }
@@ -74,23 +77,24 @@ export const assetsClient = (workspaceId: string): AssetsClient => {
     // however, the openapi-fetch library requires valid url to call the fetch
     // method to start with, so we just use nonsense host.
     baseUrl: `https://ignoreme.com${path}`,
-    fetch:  asAppJiraFetch,
+    fetch: asAppJiraFetch,
   });
   return client;
 };
 
 export const unwrap = async <TResult extends OpenApiResult>(
   promise: Promise<TResult>,
-  message = "OpenAPI error",
+  message = 'OpenAPI error',
 ): Promise<OpenApiResultDataOf<TResult>> => {
-  const result = await promise
+  const result = await promise;
 
-  if ("error" in result) {
+  if ('error' in result) {
     throw new OpenApiResponseError(
       result.response,
       result.error as OpenApiResultErrorOf<TResult>,
-      message)
+      message,
+    );
   }
 
-  return result.data as OpenApiResultDataOf<TResult>
+  return result.data as OpenApiResultDataOf<TResult>;
 };

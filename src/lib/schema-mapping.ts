@@ -1,5 +1,4 @@
-import type { Client } from "openapi-fetch";
-import type { components, paths } from "./assets-api";
+import { assetsClient } from "./forge-clients"
 import type {
   AtlassianJSMInsightImportsSchemaAndMappingDefinition,
   AttributeMapping,
@@ -7,7 +6,6 @@ import type {
   ObjectType,
   ObjectTypeMapping,
 } from "./assets-schema-and-mapping";
-import { assetsClient } from "./forge-clients"
 
 export type Mapping = {
   attributeMap: Record<string, string[]>,
@@ -15,145 +13,9 @@ export type Mapping = {
   selector: string | undefined,
 };
 
-const attributeTypeFrom = (
-  /**
-   * @description | Value | Description|
-   *     | ----- | ----------- |
-   *     | 0 | Default|
-   *     | 1 | Object reference|
-   *     | 2 | User|
-   *     | 4 | Group |
-   *     | 7 | Status |
-   */
-  objectAttributeType?: number,
-  /**
-   * DefaultType
-   * @description | Id | Description |
-   *     | -- | ----------- |
-   *     | -1 | None |
-   *     | 0 | Text |
-   *     | 1 | Integer |
-   *     | 2 | Boolean |
-   *     | 3 | Double |
-   *     | 4 | Date |
-   *     | 5 | Time |
-   *     | 6 | DateTime |
-   *     | 7 | Url |
-   *     | 8 | Email |
-   *     | 9 | Textarea |
-   *     | 10 | Select |
-   *     | 11 | IP Address |
-   */
-  id?: components["schemas"]["DefaultType"]["id"],
-): ObjectAttribute["type"] => {
-  switch (objectAttributeType ?? 0) {
-    case 0:
-      switch (id ?? 0) {
-        case 0: return "text";
-        case 1: return "integer";
-        case 2: return "boolean";
-        case 3: return "double";
-        case 4: return "date";
-        case 5: return "time";
-        case 6: return "date_time";
-        case 7: return "url";
-        case 8: return "email";
-        case 9: return "textarea";
-        case 10: return "select";
-        case 11: return "ipaddress"
-        default: return "text";
-      }
-    case 2:
-      return "referenced_object";
-    case 7:
-      return "status";
-    default: return "text";
-  }
-}
-
-const generateSchema = async (
-  client: Client<paths, `${string}/${string}`>,
-  schemaId: string,
-): Promise<AtlassianJSMInsightImportsSchemaAndMappingDefinition["schema"] | undefined> => {
-  const schemaResponse = await client.GET("/objectschema/{id}", {params: {path: {id: schemaId}}});
-  if (schemaResponse.error) {
-    throw new Error(`unable to lookup schema for ${schemaId}`, {cause: schemaResponse.error});
-  }
-  if (!schemaResponse.data) {
-    throw new Error(`data empty in lookup schema for ${schemaId}: ${schemaResponse.error}`);
-  }
-  const schema = schemaResponse.data
-  console.log(`got schema ${schemaId}: ${schema.name}`)
-
-  const objectTypes = await client
-    .GET("/objectschema/{id}/objecttypes", {params: {path: {id: schemaId}}})
-  if (objectTypes.error) {
-    throw new Error(`unable to lookup object types for ${schemaId}: ${objectTypes.error}`);
-  }
-  const entries = objectTypes?.data ?? []
-  console.log(`got ${entries.length} object types for schema ${schemaId}`)
-
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  const schemaObjectTypes = await Promise.all(
-    entries.map(
-      async (t): Promise<ObjectType> => {
-        return {
-          externalId: `${t.objectSchemaId}:${t.id}`,
-          description: t.description ?? t.name,
-          name: t.name,
-          attributes:
-            (await client.GET("/objecttype/{id}/attributes", {workspaceId: "", params: {path: {id: t.id}}}))
-              .data
-              ?.map<ObjectAttribute>(a => {
-                return {
-                  description: a.description ?? `id: ${a.id}`,
-                  externalId: `${t.objectSchemaId}:${t.id}:${a.id}`,
-                  name: a.name ?? a.id,
-                  type: attributeTypeFrom(a.type, a.defaultType?.id),
-                };
-              })
-        };
-      }));
-  if (schemaObjectTypes.length === 0) {
-    return undefined;
-  }
-
-  const result = {
-    objectSchema: {
-      description: schema.description ?? schema.name,
-      name: schema.name,
-      objectTypes: schemaObjectTypes as [ObjectType, ...ObjectType[]],
-    }
-  };
-  console.log(`generated schema is: ${JSON.stringify(result)}`)
-  return result
-}
-
-export const generateSchemaMapping = (
-  schema: AtlassianJSMInsightImportsSchemaAndMappingDefinition["schema"],
-  mapping: AtlassianJSMInsightImportsSchemaAndMappingDefinition["mapping"]
-): AtlassianJSMInsightImportsSchemaAndMappingDefinition["mapping"] => {
-  schema.objectSchema.objectTypes
-    .map(
-      (objectType) => {
-        const mapped: ObjectTypeMapping = {
-          description: objectType.description,
-          objectTypeExternalId: objectType.externalId,
-          objectTypeName: objectType.name,
-          selector: "",
-        }
-        return mapped;
-      })
-  return mapping;
-};
-
 export const getSchemaAndMapping = async (
   workspaceId: string,
   importId: string,
-  schemaId: string,
 ): Promise<AtlassianJSMInsightImportsSchemaAndMappingDefinition> => {
   const client = assetsClient(workspaceId);
 
@@ -166,20 +28,15 @@ export const getSchemaAndMapping = async (
         }
       }
     });
+
   if (error) {
     throw new Error(`unable to lookup schema-and-mapping: ${error}`)
   }
   if (!data) {
     throw new Error(`data empty schema-and-mapping`)
   }
-  const schemaAndMapping = data as AtlassianJSMInsightImportsSchemaAndMappingDefinition
 
-  // const schema = await generateSchema(client, schemaId)
-  // if (schema) {
-  //   schemaAndMapping.schema = schema;
-  // }
-
-  return schemaAndMapping
+  return data as AtlassianJSMInsightImportsSchemaAndMappingDefinition
 };
 
 const mapObjectAttributes = (

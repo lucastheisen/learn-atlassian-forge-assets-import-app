@@ -1,165 +1,104 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WhereConditions } from '@forge/api';
-import { kvs } from '@forge/kvs';
 
+import type { ImportManifest } from './kv-data';
 import { getLatestManifest } from './kv-data';
+import { iterateAllValues } from './kv-common';
 
-vi.mock('@forge/api', () => ({
-  WhereConditions: {
-    beginsWith: vi.fn((value: string) => ({ type: 'beginsWith', value })),
-  },
+vi.mock('./kv-common', () => ({
+  deleteAllValues: vi.fn(),
+  getAllValues: vi.fn(),
+  iterateAllValues: vi.fn(),
 }));
 
-vi.mock('@forge/kvs', () => ({
-  kvs: {
-    query: vi.fn(),
-  },
-  BeginsWithClause: class BeginsWithClause {},
-}));
+const asAsyncGenerator = async function* <T>(values: T[]): AsyncGenerator<T> {
+  for (const value of values) {
+    yield value;
+  }
+};
+
+const manifest = (
+  timestamp: string,
+  data: { key: string }[] = [],
+  totals = { keys: data.length, records: data.length * 10 },
+): ImportManifest => ({
+  data,
+  timestamp,
+  totals,
+});
 
 describe('getLatestManifest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns undefined when kvs returns no manifests', async () => {
-    const beginsWithClause = { type: 'beginsWith', value: 'import:manifest:' };
-    vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
-
-    const getMany = vi.fn().mockResolvedValue({
-      results: [],
-    });
-    const where = vi.fn().mockReturnValue({ getMany });
-
-    vi.mocked(kvs.query).mockReturnValue({ where } as any);
+  it('returns undefined when no manifests exist', async () => {
+    vi.mocked(iterateAllValues).mockReturnValue(asAsyncGenerator([]));
 
     const result = await getLatestManifest();
 
     expect(result).toBeUndefined();
-    expect(WhereConditions.beginsWith).toHaveBeenCalledWith('import:manifest:');
-    expect(kvs.query).toHaveBeenCalledOnce();
-    expect(where).toHaveBeenCalledWith('key', beginsWithClause);
-    expect(getMany).toHaveBeenCalledOnce();
+    expect(iterateAllValues).toHaveBeenCalledOnce();
+    expect(iterateAllValues).toHaveBeenCalledWith('import:manifest:');
   });
 
-  it('queries kvs and returns the most recent manifest', async () => {
-    const older = {
-      data: [{ key: 'old' }],
-      timestamp: '2024-01-01T00:00:00.000Z',
-      totals: {
-        keys: 1,
-        records: 10,
-      },
-    };
+  it('returns the most recent manifest', async () => {
+    const older = manifest(
+      '2024-01-01T00:00:00.000Z',
+      [{ key: 'old' }],
+      { keys: 1, records: 10 },
+    );
 
-    const newer = {
-      data: [{ key: 'new' }, { key: 'new2' }],
-      timestamp: '2024-02-01T00:00:00.000Z',
-      totals: {
-        keys: 2,
-        records: 20,
-      },
-    };
+    const newer = manifest(
+      '2024-02-01T00:00:00.000Z',
+      [{ key: 'new' }, { key: 'new2' }],
+      { keys: 2, records: 20 },
+    );
 
-    const beginsWithClause = { type: 'beginsWith', value: 'import:manifest:' };
-    vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
-
-    const getMany = vi.fn().mockResolvedValue({
-      results: [
-        { value: older },
-        { value: newer },
-      ],
-    });
-    const where = vi.fn().mockReturnValue({ getMany });
-
-    vi.mocked(kvs.query).mockReturnValue({ where } as any);
+    vi.mocked(iterateAllValues).mockReturnValue(
+      asAsyncGenerator([
+        { key: 'import:manifest:2024-01-01T00:00:00.000Z:manifest', value: older },
+        { key: 'import:manifest:2024-02-01T00:00:00.000Z:manifest', value: newer },
+      ]),
+    );
 
     const result = await getLatestManifest();
 
-    expect(result).toBeDefined();
-    expect(result?.timestamp).toBe('2024-02-01T00:00:00.000Z');
-    expect(result?.data).toEqual([{ key: 'new' }, { key: 'new2' }]);
-    expect(result?.totals).toEqual({ keys: 2, records: 20 });
-
-    expect(WhereConditions.beginsWith).toHaveBeenCalledWith('import:manifest:');
-    expect(kvs.query).toHaveBeenCalledOnce();
-    expect(where).toHaveBeenCalledWith('key', beginsWithClause);
-    expect(getMany).toHaveBeenCalledOnce();
+    expect(result).toEqual(newer);
+    expect(iterateAllValues).toHaveBeenCalledOnce();
+    expect(iterateAllValues).toHaveBeenCalledWith('import:manifest:');
   });
 
-  it('follows pagination cursors and returns the most recent manifest across pages', async () => {
-    const oldest = {
-      data: [{ key: 'oldest' }],
-      timestamp: '2024-01-01T00:00:00.000Z',
-      totals: {
-        keys: 1,
-        records: 10,
-      },
-    };
+  it('returns the newest manifest even when yielded out of order', async () => {
+    const oldest = manifest(
+      '2024-01-01T00:00:00.000Z',
+      [{ key: 'oldest' }],
+      { keys: 1, records: 10 },
+    );
 
-    const middle = {
-      data: [{ key: 'middle' }],
-      timestamp: '2024-02-01T00:00:00.000Z',
-      totals: {
-        keys: 1,
-        records: 20,
-      },
-    };
+    const middle = manifest(
+      '2024-02-01T00:00:00.000Z',
+      [{ key: 'middle' }],
+      { keys: 1, records: 20 },
+    );
 
-    const newest = {
-      data: [{ key: 'newest' }, { key: 'newest2' }],
-      timestamp: '2024-03-01T00:00:00.000Z',
-      totals: {
-        keys: 2,
-        records: 30,
-      },
-    };
+    const newest = manifest(
+      '2024-03-01T00:00:00.000Z',
+      [{ key: 'newest' }, { key: 'newest2' }],
+      { keys: 2, records: 30 },
+    );
 
-    const beginsWithClause = { type: 'beginsWith', value: 'import:manifest:' };
-    vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
-
-    const getManyFirstPage = vi.fn().mockResolvedValue({
-      results: [
-        { value: oldest },
-        { value: middle },
-      ],
-      nextCursor: 'cursor-1',
-    });
-
-    const getManySecondPage = vi.fn().mockResolvedValue({
-      results: [
-        { value: newest },
-      ],
-      nextCursor: undefined,
-    });
-
-    const cursor = vi.fn().mockReturnValue({
-      getMany: getManySecondPage,
-    });
-
-    const where = vi.fn().mockReturnValue({
-      getMany: getManyFirstPage,
-      cursor,
-    });
-
-    vi.mocked(kvs.query).mockReturnValue({ where } as any);
+    vi.mocked(iterateAllValues).mockReturnValue(
+      asAsyncGenerator([
+        { key: 'import:manifest:2024-02-01T00:00:00.000Z:manifest', value: middle },
+        { key: 'import:manifest:2024-01-01T00:00:00.000Z:manifest', value: oldest },
+        { key: 'import:manifest:2024-03-01T00:00:00.000Z:manifest', value: newest },
+      ]),
+    );
 
     const result = await getLatestManifest();
 
-    expect(result).toBeDefined();
-    expect(result?.timestamp).toBe('2024-03-01T00:00:00.000Z');
-    expect(result?.data).toEqual([{ key: 'newest' }, { key: 'newest2' }]);
-    expect(result?.totals).toEqual({ keys: 2, records: 30 });
-
-    expect(WhereConditions.beginsWith).toHaveBeenCalledWith('import:manifest:');
-    expect(kvs.query).toHaveBeenCalledTimes(2);
-    expect(where).toHaveBeenCalledTimes(2);
-    expect(where).toHaveBeenNthCalledWith(1, 'key', beginsWithClause);
-    expect(where).toHaveBeenNthCalledWith(2, 'key', beginsWithClause);
-
-    expect(getManyFirstPage).toHaveBeenCalledOnce();
-    expect(cursor).toHaveBeenCalledOnce();
-    expect(cursor).toHaveBeenCalledWith('cursor-1');
-    expect(getManySecondPage).toHaveBeenCalledOnce();
+    expect(result).toEqual(newest);
+    expect(iterateAllValues).toHaveBeenCalledOnce();
+    expect(iterateAllValues).toHaveBeenCalledWith('import:manifest:');
   });
 });
