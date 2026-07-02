@@ -1,25 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { deleteAllValues, getAllValues, iterateAllValues } from './kv-common';
-import { kvs, WhereConditions } from '@forge/kvs';
+import { deleteAllValues, getAllValues, iterateAllValues } from "./kv-common";
+import { kvs, WhereConditions } from "@forge/kvs";
+import { DataAccessError } from "./errors";
 
-vi.mock('@forge/kvs', () => ({
+vi.mock("@forge/kvs", () => ({
   kvs: {
     batchDelete: vi.fn(),
     query: vi.fn(),
   },
   WhereConditions: {
-    beginsWith: vi.fn((value: string) => ({ type: 'beginsWith', value })),
+    beginsWith: vi.fn((value: string) => ({ type: "beginsWith", value })),
   },
 }));
 
-describe('kv-common', () => {
+describe("kv-common", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('deleteAllValues', () => {
-    it('returns an empty batch result when given no keys', async () => {
+  describe("deleteAllValues", () => {
+    it("returns an empty batch result when given no keys", async () => {
       const result = await deleteAllValues([]);
 
       expect(result).toStrictEqual({
@@ -29,26 +30,26 @@ describe('kv-common', () => {
       expect(kvs.batchDelete).not.toHaveBeenCalled();
     });
 
-    it('deletes a single batch of keys', async () => {
+    it("deletes a single batch of keys", async () => {
       vi.mocked(kvs.batchDelete).mockResolvedValue({
-        successfulKeys: [{ key: 'a' }, { key: 'b' }],
+        successfulKeys: [{ key: "a" }, { key: "b" }],
         failedKeys: [],
       });
 
-      const result = await deleteAllValues(['a', 'b']);
+      const result = await deleteAllValues(["a", "b"]);
 
       expect(kvs.batchDelete).toHaveBeenCalledOnce();
       expect(kvs.batchDelete).toHaveBeenCalledWith([
-        { key: 'a' },
-        { key: 'b' },
+        { key: "a" },
+        { key: "b" },
       ]);
       expect(result).toStrictEqual({
-        successfulKeys: [{ key: 'a' }, { key: 'b' }],
+        successfulKeys: [{ key: "a" }, { key: "b" }],
         failedKeys: [],
       });
     });
 
-    it('splits deletes into batches of 25 and merges results', async () => {
+    it("splits deletes into batches of 25 and merges results", async () => {
       const keys = Array.from({ length: 26 }, (_, i) => `key-${i + 1}`);
 
       vi.mocked(kvs.batchDelete)
@@ -60,10 +61,10 @@ describe('kv-common', () => {
           successfulKeys: [],
           failedKeys: [
             {
-              key: 'key-26',
+              key: "key-26",
               error: {
-                code: 'SOME_ERROR',
-                message: 'failed',
+                code: "SOME_ERROR",
+                message: "failed",
               },
             },
           ],
@@ -74,37 +75,48 @@ describe('kv-common', () => {
       expect(kvs.batchDelete).toHaveBeenCalledTimes(2);
       expect(kvs.batchDelete).toHaveBeenNthCalledWith(
         1,
-        keys.slice(0, 25).map((key) => ({ key }))
+        keys.slice(0, 25).map((key) => ({ key })),
       );
       expect(kvs.batchDelete).toHaveBeenNthCalledWith(
         2,
-        [{ key: 'key-26' }]
+        [{ key: "key-26" }],
       );
 
       expect(result).toStrictEqual({
         successfulKeys: keys.slice(0, 25).map((key) => ({ key })),
         failedKeys: [
           {
-            key: 'key-26',
+            key: "key-26",
             error: {
-              code: 'SOME_ERROR',
-              message: 'failed',
+              code: "SOME_ERROR",
+              message: "failed",
             },
           },
         ],
       });
     });
+
+    it("wraps batchDelete exceptions as DataAccessError", async () => {
+      vi.mocked(kvs.batchDelete).mockRejectedValueOnce(new Error("boom"));
+
+      const promise = deleteAllValues(["a"]);
+
+      await expect(promise).rejects.toBeInstanceOf(DataAccessError);
+      await expect(promise).rejects.toMatchObject({
+        code: "KVS_BATCH_DELETE_FAILED",
+      });
+    });
   });
 
-  describe('iterateAllValues', () => {
-    it('yields results from a single page', async () => {
-      const beginsWithClause = { type: 'beginsWith', value: 'prefix:' };
+  describe("iterateAllValues", () => {
+    it("yields results from a single page", async () => {
+      const beginsWithClause = { type: "beginsWith", value: "prefix:" };
       vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
 
       const getMany = vi.fn().mockResolvedValue({
         results: [
-          { key: 'prefix:1', value: 1 },
-          { key: 'prefix:2', value: 2 },
+          { key: "prefix:1", value: 1 },
+          { key: "prefix:2", value: 2 },
         ],
         nextCursor: undefined,
       });
@@ -113,35 +125,35 @@ describe('kv-common', () => {
       vi.mocked(kvs.query).mockReturnValue({ where } as any);
 
       const results = [];
-      for await (const value of iterateAllValues<number>('prefix:')) {
+      for await (const value of iterateAllValues<number>("prefix:")) {
         results.push(value);
       }
 
       expect(results).toStrictEqual([
-        { key: 'prefix:1', value: 1 },
-        { key: 'prefix:2', value: 2 },
+        { key: "prefix:1", value: 1 },
+        { key: "prefix:2", value: 2 },
       ]);
-      expect(WhereConditions.beginsWith).toHaveBeenCalledWith('prefix:');
+      expect(WhereConditions.beginsWith).toHaveBeenCalledWith("prefix:");
       expect(kvs.query).toHaveBeenCalledOnce();
-      expect(where).toHaveBeenCalledWith('key', beginsWithClause);
+      expect(where).toHaveBeenCalledWith("key", beginsWithClause);
       expect(getMany).toHaveBeenCalledOnce();
     });
 
-    it('follows pagination cursors across multiple pages', async () => {
-      const beginsWithClause = { type: 'beginsWith', value: 'prefix:' };
+    it("follows pagination cursors across multiple pages", async () => {
+      const beginsWithClause = { type: "beginsWith", value: "prefix:" };
       vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
 
       const firstGetMany = vi.fn().mockResolvedValue({
         results: [
-          { key: 'prefix:1', value: 1 },
-          { key: 'prefix:2', value: 2 },
+          { key: "prefix:1", value: 1 },
+          { key: "prefix:2", value: 2 },
         ],
-        nextCursor: 'cursor-1',
+        nextCursor: "cursor-1",
       });
 
       const secondGetMany = vi.fn().mockResolvedValue({
         results: [
-          { key: 'prefix:3', value: 3 },
+          { key: "prefix:3", value: 3 },
         ],
         nextCursor: undefined,
       });
@@ -163,47 +175,69 @@ describe('kv-common', () => {
         .mockReturnValueOnce({ where: secondWhere } as any);
 
       const results = [];
-      for await (const value of iterateAllValues<number>('prefix:')) {
+      for await (const value of iterateAllValues<number>("prefix:")) {
         results.push(value);
       }
 
       expect(results).toStrictEqual([
-        { key: 'prefix:1', value: 1 },
-        { key: 'prefix:2', value: 2 },
-        { key: 'prefix:3', value: 3 },
+        { key: "prefix:1", value: 1 },
+        { key: "prefix:2", value: 2 },
+        { key: "prefix:3", value: 3 },
       ]);
 
       expect(WhereConditions.beginsWith).toHaveBeenCalledTimes(2);
-      expect(WhereConditions.beginsWith).toHaveBeenNthCalledWith(1, 'prefix:');
-      expect(WhereConditions.beginsWith).toHaveBeenNthCalledWith(2, 'prefix:');
+      expect(WhereConditions.beginsWith).toHaveBeenNthCalledWith(1, "prefix:");
+      expect(WhereConditions.beginsWith).toHaveBeenNthCalledWith(2, "prefix:");
 
       expect(kvs.query).toHaveBeenCalledTimes(2);
 
-      expect(firstWhere).toHaveBeenCalledWith('key', beginsWithClause);
+      expect(firstWhere).toHaveBeenCalledWith("key", beginsWithClause);
       expect(firstGetMany).toHaveBeenCalledOnce();
 
-      expect(secondWhere).toHaveBeenCalledWith('key', beginsWithClause);
-      expect(secondCursor).toHaveBeenCalledWith('cursor-1');
+      expect(secondWhere).toHaveBeenCalledWith("key", beginsWithClause);
+      expect(secondCursor).toHaveBeenCalledWith("cursor-1");
       expect(secondGetMany).toHaveBeenCalledOnce();
+    });
+
+    it("wraps query failures as DataAccessError", async () => {
+      const beginsWithClause = { type: "beginsWith", value: "prefix:" };
+      vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
+
+      const getMany = vi.fn().mockRejectedValueOnce(new Error("boom"));
+      const where = vi.fn().mockReturnValue({ getMany });
+      vi.mocked(kvs.query).mockReturnValue({ where } as any);
+
+      const collect = async () => {
+        for await (const _value of iterateAllValues<number>("prefix:")) {
+          // no-op
+        }
+      };
+
+      const promise = collect();
+
+      await expect(promise).rejects.toBeInstanceOf(DataAccessError);
+      await expect(promise).rejects.toMatchObject({
+        code: "KVS_QUERY_FAILED",
+      });
     });
   });
 
-  describe('getAllValues', () => {
-    it('collects all values from all pages', async () => {
-      const beginsWithClause = { type: 'beginsWith', value: 'prefix:' };
+  describe("getAllValues", () => {
+    it("collects all values from all pages", async () => {
+      const beginsWithClause = { type: "beginsWith", value: "prefix:" };
       vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
 
       const firstGetMany = vi.fn().mockResolvedValue({
         results: [
-          { key: 'prefix:1', value: 1 },
+          { key: "prefix:1", value: 1 },
         ],
-        nextCursor: 'cursor-1',
+        nextCursor: "cursor-1",
       });
 
       const secondGetMany = vi.fn().mockResolvedValue({
         results: [
-          { key: 'prefix:2', value: 2 },
-          { key: 'prefix:3', value: 3 },
+          { key: "prefix:2", value: 2 },
+          { key: "prefix:3", value: 3 },
         ],
         nextCursor: undefined,
       });
@@ -224,12 +258,12 @@ describe('kv-common', () => {
         .mockReturnValueOnce({ where: firstWhere } as any)
         .mockReturnValueOnce({ where: secondWhere } as any);
 
-      const results = await getAllValues<number>('prefix:');
+      const results = await getAllValues<number>("prefix:");
 
       expect(results).toStrictEqual([
-        { key: 'prefix:1', value: 1 },
-        { key: 'prefix:2', value: 2 },
-        { key: 'prefix:3', value: 3 },
+        { key: "prefix:1", value: 1 },
+        { key: "prefix:2", value: 2 },
+        { key: "prefix:3", value: 3 },
       ]);
     });
   });

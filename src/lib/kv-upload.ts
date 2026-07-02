@@ -1,19 +1,10 @@
-import { kvs } from '@forge/kvs';
-import { deleteAllValues, getAllValues } from './kv-common';
-import { BadRequestError } from '../resolvers/webtrigger/errors';
+import { kvs, PolicySetOptions } from "@forge/kvs";
+import { deleteAllValues, getAllValues } from "./kv-common";
+import { ArgumentError, DataAccessError, InvalidOperationError } from "./errors";
+import { type ImportManifest, importManifestKey } from "./kv-data";
 
 // CODE_REVIEW_CATCH_ME: need to add error handling for kvs calls, i think they throw
 // ForgeKvsError or ForgeKvsAPIError (probably the later which allows discrimination)
-interface ImportManifest {
-  uploadId: string;
-  timestamp: string;
-  data: UploadDataManifest[];
-  totals: {
-    keys: number;
-    records: number;
-  };
-}
-
 interface UploadDataManifest {
   index: number;
   key: string;
@@ -23,6 +14,7 @@ interface UploadDataManifest {
 interface UploadManifest {
   uploadId: string;
   timestamp: string;
+  testing: boolean;
 }
 
 type UploadData = Record<string, unknown>;
@@ -30,17 +22,36 @@ type UploadData = Record<string, unknown>;
 const countRecords = (data: UploadData): number => {
   const entries = Object.entries(data);
   if (entries.length !== 1) {
-    throw new BadRequestError('Upload data must contain exactly one top-level key');
+    throw new ArgumentError(
+      "UPLOAD_DATA_INVALID_TOP_LEVEL_KEYS",
+      "Upload data must contain exactly one top-level key",
+      {
+        details: {
+          topLevelKeys: entries.map(([key]) => key),
+        },
+      },
+    );
   }
 
   const entry = entries[0];
   if (entry === undefined) {
-    throw new BadRequestError('Upload data must contain exactly one top-level key');
+    throw new ArgumentError(
+      "UPLOAD_DATA_INVALID_TOP_LEVEL_KEYS",
+      "Upload data must contain exactly one top-level key",
+    );
   }
 
   const [, value] = entry;
   if (!Array.isArray(value)) {
-    throw new BadRequestError('Upload data top-level value must be an array');
+    throw new ArgumentError(
+      "UPLOAD_DATA_TOP_LEVEL_VALUE_NOT_ARRAY",
+      "Upload data top-level value must be an array",
+      {
+        details: {
+          topLevelKey: entry[0],
+        },
+      },
+    );
   }
 
   return value.length;
@@ -49,9 +60,7 @@ const countRecords = (data: UploadData): number => {
 const importDataKey = (timestamp: string, index: number) =>
   `import:data:${timestamp}:${padIndex(index)}`;
 
-const importManifestKey = (timestamp: string) => `import:manifest:${timestamp}:manifest`;
-
-const padIndex = (index: number) => String(index).padStart(6, '0');
+const padIndex = (index: number) => String(index).padStart(6, "0");
 
 const uploadKeyPrefix = (uploadId: string) => `import:upload:${uploadId}:`;
 
@@ -62,27 +71,70 @@ const uploadDataManifestKey = (uploadId: string, index: number) =>
 
 const uploadManifestKey = (uploadId: string) => `import:upload:${uploadId}:manifest`;
 
+async function getValue<T>(key: string, operation: string): Promise<T | undefined> {
+  try {
+    return await kvs.get<T>(key);
+  } catch (err) {
+    throw new DataAccessError(
+      "KVS_GET_FAILED",
+      `Failed to ${operation}`,
+      {
+        cause: err,
+        details: { key },
+      },
+    );
+  }
+}
+
+async function setValue<T>(
+  key: string,
+  value: T,
+  options: PolicySetOptions,
+  operation: string,
+): Promise<void> {
+  try {
+    await kvs.set(key, value, options);
+  } catch (err) {
+    throw new DataAccessError(
+      "KVS_SET_FAILED",
+      `Failed to ${operation}`,
+      {
+        cause: err,
+        details: { key },
+      },
+    );
+  }
+}
+
 export const writeUploadComplete = async (
-  uploadId: string
+  uploadId: string,
 ): Promise<ImportManifest> => {
   const uploadKey = uploadManifestKey(uploadId);
-  const upload = await kvs.get<UploadManifest>(uploadKey);
+  const upload = await getValue<UploadManifest>(uploadKey, "read upload manifest");
 
   if (!upload) {
-    throw new BadRequestError(`Upload not found: ${uploadId}`);
+    throw new InvalidOperationError(
+      "UPLOAD_NOT_FOUND",
+      `Upload not found: ${uploadId}`,
+      {
+        details: { uploadId },
+      },
+    );
   }
 
-  const importKey = importManifestKey(upload.timestamp);
+  const importKey = importManifestKey(upload.timestamp, upload.testing);
 
-  const existing = await kvs.get<ImportManifest>(importKey);
+  const existing = await getValue<ImportManifest>(importKey, "read import manifest");
   if (existing) {
     return existing;
   }
 
   const uploadData = (await getAllValues<UploadDataManifest>(uploadDataManifestKeyPrefix(uploadId)))
     .sort((a, b) => a.value.index - b.value.index);
+
   const manifest: ImportManifest = {
     uploadId,
+    testing: upload.testing,
     timestamp: upload.timestamp,
     data: uploadData.map((k) => k.value),
     totals: {
@@ -91,18 +143,32 @@ export const writeUploadComplete = async (
     },
   };
 
-  await kvs.set(
+  await setValue(
     importKey,
     manifest,
     {
-      keyPolicy: 'FAIL_IF_EXISTS',
+      keyPolicy: "FAIL_IF_EXISTS",
       ttl: {
-        unit: 'DAYS',
+        unit: "DAYS",
         value: 7,
       },
-    });
+    },
+    "persist completed import manifest",
+  );
 
-  await deleteAllValues([...uploadData.map(({key}) => key), uploadKey]);
+  const deleteResult = await deleteAllValues([...uploadData.map(({ key }) => key), uploadKey]);
+  if (deleteResult.failedKeys.length > 0) {
+    throw new DataAccessError(
+      "KVS_DELETE_FAILED",
+      "Failed to clean up upload staging keys after completing upload",
+      {
+        details: {
+          uploadId,
+          failedKeys: deleteResult.failedKeys,
+        },
+      },
+    );
+  }
 
   return manifest;
 };
@@ -110,33 +176,53 @@ export const writeUploadComplete = async (
 export const writeUploadData = async (
   uploadId: string,
   index: number,
-  data: UploadData
+  data: UploadData,
 ): Promise<UploadDataManifest> => {
   // do count right away because it performs some validations.
   const count = countRecords(data);
 
-  const upload = await kvs.get<UploadManifest>(uploadManifestKey(uploadId));
+  const upload = await getValue<UploadManifest>(
+    uploadManifestKey(uploadId),
+    "read upload manifest",
+  );
 
   if (!upload) {
-    throw new BadRequestError(`Upload not found: ${uploadId}`);
+    throw new InvalidOperationError(
+      "UPLOAD_NOT_FOUND",
+      `Upload not found: ${uploadId}`,
+      {
+        details: { uploadId },
+      },
+    );
   }
 
-  const importManifest = await kvs.get(importManifestKey(upload.timestamp));
+  const importManifest = await getValue(
+    importManifestKey(upload.timestamp, upload.testing),
+    "read import manifest",
+  );
   if (importManifest !== undefined) {
-    throw new BadRequestError(`Upload already completed: ${uploadId}`);
+    throw new InvalidOperationError(
+      "UPLOAD_ALREADY_COMPLETED",
+      `Upload already completed: ${uploadId}`,
+      {
+        details: { uploadId, timestamp: upload.timestamp },
+      },
+    );
   }
 
   const dataKey = importDataKey(upload.timestamp, index);
-  await kvs.set(
+  await setValue(
     dataKey,
     data,
     {
-      keyPolicy: 'OVERRIDE',
+      keyPolicy: "OVERRIDE",
       ttl: {
-        unit: 'DAYS',
+        unit: "DAYS",
         value: 7,
       },
-    });
+    },
+    "persist upload data chunk",
+  );
 
   const meta: UploadDataManifest = {
     index,
@@ -145,36 +231,44 @@ export const writeUploadData = async (
   };
 
   const metaKey = uploadDataManifestKey(uploadId, index);
-  await kvs.set(
+  await setValue(
     metaKey,
     meta,
     {
-      keyPolicy: 'OVERRIDE',
+      keyPolicy: "OVERRIDE",
       ttl: {
-        unit: 'HOURS',
+        unit: "HOURS",
         value: 4,
       },
-    });
+    },
+    "persist upload data chunk metadata",
+  );
 
   return meta;
 };
 
-export const writeUploadNew = async (uploadId: string): Promise<UploadManifest> => {
+export const writeUploadNew = async (
+  uploadId: string,
+  testing = false,
+): Promise<UploadManifest> => {
   const manifest: UploadManifest = {
     uploadId,
     timestamp: new Date().toISOString(),
+    testing,
   };
 
-  await kvs.set(
+  await setValue(
     uploadManifestKey(uploadId),
     manifest,
     {
-      keyPolicy: 'FAIL_IF_EXISTS',
+      keyPolicy: "FAIL_IF_EXISTS",
       ttl: {
-        unit: 'HOURS',
+        unit: "HOURS",
         value: 4,
       },
-    });
+    },
+    "create upload manifest",
+  );
 
   return manifest;
 };

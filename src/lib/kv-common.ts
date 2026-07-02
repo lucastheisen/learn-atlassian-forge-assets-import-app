@@ -1,4 +1,11 @@
-import { type BatchResult, kvs, type ListResult, type Result, WhereConditions } from "@forge/kvs";
+import {
+  type BatchResult,
+  kvs,
+  type ListResult,
+  type Result,
+  WhereConditions,
+} from "@forge/kvs";
+import { DataAccessError } from "./errors";
 
 // per the documentation:
 //   https://developer.atlassian.com/platform/forge/storage-reference/kvs-batch/#limitations
@@ -17,7 +24,20 @@ export async function deleteAllValues(keys: string[]): Promise<BatchResult> {
 
   for (let i = 0; i < keys.length; i += MAX_BATCH_KEYS) {
     const batchKeys = keys.slice(i, i + MAX_BATCH_KEYS);
-    const batchResult = await kvs.batchDelete(batchKeys.map((key) => ({ key })));
+
+    let batchResult: BatchResult;
+    try {
+      batchResult = await kvs.batchDelete(batchKeys.map((key) => ({ key })));
+    } catch (err) {
+      throw new DataAccessError(
+        "KVS_BATCH_DELETE_FAILED",
+        "Failed to delete KVS keys",
+        {
+          cause: err,
+          details: { keys: batchKeys },
+        },
+      );
+    }
 
     result.successfulKeys.push(...batchResult.successfulKeys);
     result.failedKeys.push(...batchResult.failedKeys);
@@ -27,11 +47,11 @@ export async function deleteAllValues(keys: string[]): Promise<BatchResult> {
 }
 
 export async function getAllValues<T>(prefix: string): Promise<Result<T>[]> {
-  let all: Result<T>[] = []
-  for await(const value of iterateAllValues<T>(prefix)) {
-    all.push(value)
+  const all: Result<T>[] = [];
+  for await (const value of iterateAllValues<T>(prefix)) {
+    all.push(value);
   }
-  return all
+  return all;
 }
 
 // uses function* here because generator functions cannot be defined using
@@ -51,13 +71,24 @@ export async function* iterateAllValues<T>(prefix: string): AsyncGenerator<Resul
 }
 
 async function nextPage<T>(prefix: string, cursor?: string): Promise<ListResult<T>> {
-  const query = kvs
-    .query()
-    .where('key', WhereConditions.beginsWith(prefix));
+  try {
+    const query = kvs
+      .query()
+      .where("key", WhereConditions.beginsWith(prefix));
 
-  if (cursor === undefined) {
-    return query.getMany<T>();
+    if (cursor === undefined) {
+      return await query.getMany<T>();
+    }
+
+    return await query.cursor(cursor).getMany<T>();
+  } catch (err) {
+    throw new DataAccessError(
+      "KVS_QUERY_FAILED",
+      "Failed to query KVS values",
+      {
+        cause: err,
+        details: { prefix, cursor },
+      },
+    );
   }
-
-  return query.cursor(cursor).getMany<T>();
-};
+}
