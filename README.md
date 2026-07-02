@@ -8,39 +8,39 @@ So we would still need the controller queue to watch for completion of import th
 This bolt on extra work could be performed via webhook -> queue directly without the import stuff.
 So the _only_ value of this import process would be that _IF_ we can get the edge proxy installed allowing direct access to FAA data, then we do not need any external resources (AWS lambda/vm) to perform the user assets upload/import.
 
-1. Webhook uploads data to K/V store
-   1. One file per 100 records, json format
-      1. Key is: `import:data:<yyyyMMDDhhmmss>:<index>`
-      1. Format:
-
-         ```json
-         [
-           {...},
-           {...}
-         ]
-         ```
-
-   1. Last file uploaded is manifest
-      1. Key is: `import:manifest:<yyyyMMDDhhmmss>`
+1. Webhook (implemented as a Forge webtrigger, see `src/resolvers/webtrigger/`) uploads data to K/V store via a multi-step lifecycle: `upload-new` creates a staging manifest, one or more `upload-data` calls persist chunks of records, then `upload-complete` assembles the final import manifest and cleans up staging keys. `upload-abort` cancels an in-progress upload; `prune` removes old completed manifests.
+   1. Each `upload-data` call persists one chunk (caller-determined size, not fixed at 100), json format
+      1. Key is: `import:data:<ISO-8601 timestamp>:<index, zero-padded to 6 digits>`
       1. Format:
 
          ```json
          {
+           "<topLevelKey>": [
+             {...},
+             {...}
+           ]
+         }
+         ```
+
+   1. `upload-complete` writes the final manifest (not implicitly inferred from upload order)
+      1. Key is: `import:manifest:<ISO-8601 timestamp>:manifest` — or `import:test-manifest:<ISO-8601 timestamp>:manifest` for uploads marked `testing: true`. Test uploads are segregated into this separate keyspace so the real import flow below can never pick them up; see `src/lib/kv-data.ts` and `AGENTS.md > Project > CI`.
+      1. Format:
+
+         ```json
+         {
+           "uploadId": "some-upload-id",
+           "testing": false,
            "data": [
              {
-               "key": "import:20260526100000:1"
-             },
-             {
-               "key": "import:20260526100000:2"
-             },
-             {
-               "key": "import:20260526100000:3"
+               "index": 1,
+               "key": "import:data:2026-05-26T10:00:00.000Z:000001",
+               "count": 100
              }
            ],
-           "timestamp": "2026-05-26T10:00:00-04:00",
+           "timestamp": "2026-05-26T10:00:00.000Z",
            "totals": {
-             "keys": 3,
-             "records": 336
+             "keys": 1,
+             "records": 100
            }
          }
          ```
