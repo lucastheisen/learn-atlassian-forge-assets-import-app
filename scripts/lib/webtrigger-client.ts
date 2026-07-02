@@ -5,17 +5,15 @@ export interface WebTriggerResponse {
   title: string
 }
 
-export async function callWebTrigger(action: Record<string, unknown>): Promise<WebTriggerResponse> {
-  const url = process.env.FORGE_WEBTRIGGER_URL
-  if (!url) {
-    throw new Error('FORGE_WEBTRIGGER_URL environment variable is required')
-  }
+export interface WebTriggerConnection {
+  url: string
+  secret: string
+}
 
-  const secret = process.env.FORGE_WEBTRIGGER_SECRET
-  if (!secret) {
-    throw new Error('FORGE_WEBTRIGGER_SECRET environment variable is required')
-  }
-
+export async function callWebTrigger(
+  action: Record<string, unknown>,
+  { url, secret }: WebTriggerConnection,
+): Promise<WebTriggerResponse> {
   const token = await generateWebTriggerToken(secret)
 
   const response = await fetch(url, {

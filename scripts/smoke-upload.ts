@@ -1,4 +1,8 @@
-import { callWebTrigger, type WebTriggerResponse } from './lib/webtrigger-client.js'
+import {
+  callWebTrigger,
+  type WebTriggerConnection,
+  type WebTriggerResponse,
+} from './lib/webtrigger-client.js'
 
 // deterministic chunk sizes spanning 1-5 records so the assertion step
 // exercises aggregation (totals.keys / totals.records) across varied shapes,
@@ -29,21 +33,35 @@ async function assertOk(step: string, response: WebTriggerResponse): Promise<voi
   }
 }
 
+function resolveConnection(): WebTriggerConnection {
+  const url = process.env.FORGE_WEBTRIGGER_URL
+  if (!url) {
+    throw new Error('FORGE_WEBTRIGGER_URL environment variable is required')
+  }
+
+  const secret = process.env.FORGE_WEBTRIGGER_SECRET
+  if (!secret) {
+    throw new Error('FORGE_WEBTRIGGER_SECRET environment variable is required')
+  }
+
+  return { url, secret }
+}
+
 async function main(): Promise<void> {
+  const connection = resolveConnection()
+  const call = (action: Record<string, unknown>) => callWebTrigger(action, connection)
+
   const uploadId = `smoke-${Date.now()}`
 
   try {
-    await assertOk(
-      'upload-new',
-      await callWebTrigger({ type: 'upload-new', uploadId, testing: true }),
-    )
+    await assertOk('upload-new', await call({ type: 'upload-new', uploadId, testing: true }))
 
     let expectedRecords = 0
     for (const [index, size] of CHUNK_SIZES.entries()) {
       expectedRecords += size
       await assertOk(
         `upload-data[${index}] (${size} users)`,
-        await callWebTrigger({
+        await call({
           type: 'upload-data',
           uploadId,
           index,
@@ -52,11 +70,11 @@ async function main(): Promise<void> {
       )
     }
 
-    await assertOk('upload-complete', await callWebTrigger({ type: 'upload-complete', uploadId }))
+    await assertOk('upload-complete', await call({ type: 'upload-complete', uploadId }))
 
     await assertOk(
       'upload-smoke-assert-latest',
-      await callWebTrigger({
+      await call({
         type: 'upload-smoke-assert-latest',
         expectedKeys: CHUNK_SIZES.length,
         expectedRecords,
@@ -69,14 +87,14 @@ async function main(): Promise<void> {
     )
   } catch (err) {
     console.error(`smoke test failed, aborting upload ${uploadId} for cleanup`)
-    await callWebTrigger({ type: 'upload-abort', uploadId }).catch((abortErr: unknown) => {
+    await call({ type: 'upload-abort', uploadId }).catch((abortErr: unknown) => {
       console.error(`upload-abort cleanup also failed: ${String(abortErr)}`)
     })
     throw err
   } finally {
     // testing uploads land in their own manifest keyspace (see
     // src/lib/kv-data.ts), so this can never prune real completed imports
-    await callWebTrigger({ type: 'prune', keepN: 0, testing: true })
+    await call({ type: 'prune', keepN: 0, testing: true })
       .then((response) => console.log(`prune (testing): ${response.status} ${response.title}`))
       .catch((pruneErr: unknown) => console.error(`cleanup prune failed: ${String(pruneErr)}`))
   }
