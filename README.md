@@ -1,7 +1,5 @@
 # User Asset Synchronization
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and smoke test setup.
-
 ## Design
 
 This seems silly because it still requires additional work unless we have direct access to the user data (would require edge proxy or some other access approach).
@@ -75,3 +73,8 @@ If a future feature needs to react to the import actually finishing (e.g. the bo
 That is a different responsibility than the old controller queue (watching Atlassian's execution state vs. watching our own worker items) and should be added if/when that feature is actually built.
 
 1. Upon (actual, backend-confirmed) completion, something does the bolt-on work to update users reference
+
+## See Also
+
+* [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and smoke test setup.
+* [docs/NOTES.md](docs/NOTES.md) for design considerations, reference links, and future work.
