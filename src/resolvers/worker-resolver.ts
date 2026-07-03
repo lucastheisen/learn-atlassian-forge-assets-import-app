@@ -68,9 +68,11 @@ export const workerHandler = async (event: AsyncEvent<WorkItem>, context: Handle
         processed: event.body.index + 1,
       },
     };
-    // dont unwrap, because unrap converts error object to thrown error which
-    // would stop the import, and progress update is simply best effort
-    client.PUT(
+    // dont unwrap, because unwrap converts error object to thrown error which
+    // would stop the import, and progress update is simply best effort — but
+    // still await and log failures so they're not silently ignored, and so
+    // the call actually completes before this function returns
+    const { error: progressError } = await client.PUT(
       "/importsource/{importSourceId}/executions/{importExecutionId}/progress",
       {
         headers: {
@@ -84,6 +86,11 @@ export const workerHandler = async (event: AsyncEvent<WorkItem>, context: Handle
         },
         body: progress,
       });
+    if (progressError) {
+      console.warn(
+        `progress update failed for importSourceId ${event.body.importSourceId} index ${event.body.index}: ${JSON.stringify(progressError)}`
+      );
+    }
 
     const _id = await workerQueue.push({
       body: {
