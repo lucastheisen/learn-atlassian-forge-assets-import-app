@@ -61,8 +61,6 @@ const asAppJiraFetch = async (input: Request): Promise<Response> => {
     opts.body = await input.text();
   }
 
-  //CODE_REVIEW_CATCH_ME: this should be replaced by something MUCH less verbose
-  console.debug(`as app fetch route <${path}> with options <${JSON.stringify(opts)}>`);
   const apiResponse: Promise<APIResponse> = api
     .asApp()
     .requestJira(assumeTrustedRoute(path), opts);

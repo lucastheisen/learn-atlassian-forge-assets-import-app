@@ -9,6 +9,15 @@
 * [Which assets import tutorial is the most up to date recommendation for using async queues?](https://community.developer.atlassian.com/t/which-assets-import-tutorial-is-the-most-up-to-date-recommendation-for-using-async-queues/100308/2)
 * [How can i enable the “Edit mapping” feature on a custom asset import app](https://community.developer.atlassian.com/t/how-can-i-enable-the-edit-mapping-feature-on-a-custom-asset-import-app/100305)
 
+## Safe observability for request/response debugging
+
+Early development relied on logging full request/response bodies and headers (see `src/lib/forge-clients.ts` and `src/lib/schema-mapping.ts` in git history at `archive/logging-safety-valve`) to see what the Assets API was actually receiving and returning while building the schema/mapping and worker code.
+That got removed because this app moves externally-sourced user data (names, emails, phone numbers, etc.), so a blanket payload dump is exactly where that data leaks into Forge's log stream — see `AGENTS.md` > Logging.
+
+The underlying developer need is still real: sometimes you need to see what the data actually looks like to debug a mapping or API issue.
+This needs a new approach that doesn't risk leaking real production data, e.g. an opt-in debug mode gated to non-production environments, or a redaction/truncation step that shows shape/structure without real values.
+Not designed yet — solve it when a concrete debugging need makes the gap painful, rather than speculatively.
+
 ## Considerations for User Sync
 
 1. Need to ingest user data

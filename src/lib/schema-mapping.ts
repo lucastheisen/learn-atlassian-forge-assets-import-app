@@ -81,7 +81,6 @@ export const mapSchema = (
   current: AtlassianJSMInsightImportsSchemaAndMappingDefinition,
   mappings: Mapping[],
 ): AtlassianJSMInsightImportsSchemaAndMappingDefinition => {
-  console.log(`mappings: ${JSON.stringify(mappings)}`)
   return {
     mapping: {
       objectTypeMappings: current.schema.objectSchema.objectTypes
@@ -109,37 +108,7 @@ export const setSchemaAndMapping = async (
     delete(schemaAndMapping.schema.iconSchema)
   }
 
-  // add request/response debugging, wont want this in the final implementation
-  client.use({
-    onRequest: ({request, options}): Request => {
-      console.log('--- Outgoing Request ---');
-      console.log('URL:', request.url);
-      console.log('Method:', request.method);
-      console.log('Headers:', Object.fromEntries(request.headers.entries()));
-
-      if (request.body) {
-        request.clone().text().then(text => console.log('Body:', text));
-      }
-
-      return request;
-    },
-    onResponse: async ({ response }): Promise<Response | undefined> => {
-      // clone the response so the stream remains available for the handler
-      const clonedResponse = response.clone();
-      const rawBody = await clonedResponse.text();
-      console.log("Full Raw Response:", {
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: rawBody,
-      });
-
-      // return undefined to let the original response proceed to your handler
-      return undefined;
-    },
-  });
-
-  console.log(`schemaAndMappings: ${JSON.stringify(schemaAndMapping)}`)
-  const { data, error } = await client
+  const { error } = await client
     //.PUT(
     .PATCH(
       "/importsource/{importSourceId}/mapping",
@@ -155,10 +124,9 @@ export const setSchemaAndMapping = async (
         body: schemaAndMapping,
       });
   if (error) {
-    console.log(JSON.stringify(error))
     throw new Error(`unable to persist mapping : ${JSON.stringify(error)}`)
   }
-  console.log(`persisted mapping with response: ${data}`)
+  console.log("mapping persisted successfully")
 }
 
 const unmapObjectAttribute = (

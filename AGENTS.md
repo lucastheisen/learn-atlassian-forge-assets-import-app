@@ -114,6 +114,12 @@
 - If you use `.asApp()` in the context of a user, you must perform any appropriate authorization checks using the relevant product permission REST APIs.
 - Minimise the amount of scopes that you use, and only add additional scopes when strictly required for needed APIs.
 
+## Logging
+
+- Never log full request/response bodies or headers — this app moves externally-sourced user data (names, emails, phone numbers, etc.) through the Assets API, so a body/header dump is exactly where that data leaks into Forge's log stream.
+- Log metadata instead: status codes, paths/methods, record counts, IDs — never the payload itself.
+- If you need deeper request/response insight while developing, don't reach for a blanket `console.log`/`console.debug` dump of the payload — see `docs/NOTES.md` > Safe observability for request/response debugging for the open problem of doing this without leaking data.
+
 ## Storing Data
 
 - Entity properties allow apps to store key-value data against Jira entities (Comments, Dashboard items, Issues, Issue types, Projects, Users and Workflow transitions) and Confluence content.
