@@ -1,4 +1,3 @@
-import api, { route } from "@forge/api";
 import Resolver from "@forge/resolver";
 import { type AssetsClient, assetsClient, unwrap } from "../lib/forge-clients";
 import { getLatestManifest, type ImportManifest } from "../lib/kv-data";
@@ -50,24 +49,6 @@ resolver.define("getConfig", async (req) => {
   return {
     mapping: mapping,
   };
-});
-
-resolver.define("newToken", async (req) => {
-  // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
-  console.log(
-    `generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
-  );
-  console.log(req);
-  const resp = await api
-    .asApp()
-    .requestJira(
-      route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/token`,
-      {
-        method: "POST",
-      },
-    );
-  const data = await resp.json();
-  return data.token;
 });
 
 resolver.define("setConfig", async (req) => {
