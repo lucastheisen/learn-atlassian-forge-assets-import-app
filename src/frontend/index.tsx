@@ -23,7 +23,6 @@ const App = () => {
   const [mapping, setMapping] = useState('');
 
   const onSubmit = async () => {
-    console.log('submit button clicked');
     await invoke('setConfig', {
       mapping: mapping,
     })
