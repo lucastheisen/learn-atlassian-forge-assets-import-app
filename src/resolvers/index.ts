@@ -52,11 +52,6 @@ resolver.define("getConfig", async (req) => {
   };
 });
 
-resolver.define("getText", (req) => {
-  console.log(req);
-  return `Hello! Your payload is ${req.payload.example}`;
-});
-
 resolver.define("newToken", async (req) => {
   // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
   console.log(

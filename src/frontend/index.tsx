@@ -9,7 +9,6 @@ import ForgeReconciler, {
   FormFooter,
   FormSection,
   Label,
-  Text,
   TextArea,
   Textfield,
 } from '@forge/react';
@@ -19,7 +18,6 @@ import type {
 } from '../resolvers/index'
 
 const App = () => {
-  const [data, setData] = useState<string | null>(null);
   const [context, setContext] = useState<FullContext | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
@@ -39,7 +37,6 @@ const App = () => {
 
   useEffect(() => {
     view.getContext().then(setContext);
-    invoke<string>('getText', { example: 'my-invoke-variable' }).then(setData);
     invoke<Config>('getConfig')
       .then(
         (config) =>
@@ -51,12 +48,20 @@ const App = () => {
   return (
     <Form onSubmit={onSubmit}>
       <FormSection>
-        <Text>
-          {context
-            ? `What is going on?, ImportId = ${context.extension.importId}, WorkspaceId = ${context.extension.workspaceId}`
-            : 'Lucas context... Loading...'}
-        </Text>
-        <Text>{data || 'Lucas data... Loading...'}</Text>
+        <Label labelFor="workspaceId">Workspace ID</Label>
+        <Textfield
+          name="workspaceId"
+          id="workspaceId"
+          isReadOnly={true}
+          value={context?.extension.workspaceId ?? ''}
+        />
+        <Label labelFor="importId">Import ID</Label>
+        <Textfield
+          name="importId"
+          id="importId"
+          isReadOnly={true}
+          value={context?.extension.importId ?? ''}
+        />
       </FormSection>
       <FormSection>
         <Label labelFor="token">Token</Label>
