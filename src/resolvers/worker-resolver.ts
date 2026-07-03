@@ -7,9 +7,9 @@ import { ModalBody } from '@forge/react';
 
 // The responsibility of the worker queue is to fetch data from the external system
 // and submit that data to CMDB. Since data most likely will be fetched in batches,
-// the worker queue will keep pushing to itself (worker) until all data is fetched and submitted
-// At which point it should mark the work items as complete so that the controller queue can
-// call the Assets API to signal the completion of data submission
+// the worker queue will keep pushing to itself (worker) until all data is fetched and submitted.
+// The final push sets completed=true, which tells the Assets backend it received the
+// last chunk and may begin the (asynchronous) import work.
 
 
 // the key here becomes the queueName in the async event argument to the handler

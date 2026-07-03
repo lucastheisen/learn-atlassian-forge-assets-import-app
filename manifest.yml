@@ -10,9 +10,6 @@ modules:
     - function: workerQueueFunction
       key: assets-import-app-uk2-assets-imports-tutorial-worker-queue-consumer
       queue: worker-queue
-    - function: controllerQueueFunction
-      key: assets-import-app-uk2-assets-imports-tutorial-controller-queue-consumer
-      queue: controller-queue
   function:
     - handler: index.handler
       key: resolver
@@ -26,8 +23,6 @@ modules:
       key: importStatus
     - handler: index.workerHandler
       key: workerQueueFunction
-    - handler: index.controllerHandler
-      key: controllerQueueFunction
     - handler: index.webtriggerDispatch
       key: webtriggerDispatch
   jiraServiceManagement:assetsImportType:
@@ -92,6 +87,7 @@ permissions:
     styles:
       - unsafe-inline
   scopes:
+    - delete:cmdb-object:jira
     - import:import-configuration:cmdb
     - read:cmdb-attribute:jira
     - read:cmdb-object:jira

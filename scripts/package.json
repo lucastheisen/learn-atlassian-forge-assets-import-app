@@ -6,6 +6,7 @@
     "generate:assets-api": "tsx generate-assets-api.ts",
     "generate:assets-schema-and-mapping": "tsx generate-assets-schema-and-mapping.ts",
     "generate:secret-key": "tsx generate-secret-key.ts",
+    "smoke:import": "tsx smoke-import.ts",
     "smoke:upload": "tsx smoke-upload.ts"
   },
   "devDependencies": {

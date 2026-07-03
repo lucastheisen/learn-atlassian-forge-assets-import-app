@@ -1,24 +1,36 @@
-import { WebTriggerContext, WebTriggerRequest } from "@forge/api";
+import type { WebTriggerContext, WebTriggerRequest } from "@forge/api";
 import z from "zod";
-import { JWTPayload } from "../../lib/jose";
-import { StaticWebTriggerResponse } from "./common";
+import type { JWTPayload } from "../../lib/jose";
+import type { StaticWebTriggerResponse } from "./common";
 import { BadRequestError, BadRequestValidationError } from "./errors";
+import {
+  ImportSmokeAssert,
+  importSmokeAssertCommand,
+} from "./import-smoke-assert";
+import {
+  ImportSmokeCleanup,
+  importSmokeCleanupCommand,
+} from "./import-smoke-cleanup";
+import { ImportStart, importStartCommand } from "./import-start";
 import { KvsDelete, kvsDeleteCommand } from "./kvs-delete";
 import { Prune, pruneCommand } from "./prune";
-import {
-  UploadSmokeAssertLatest,
-  uploadSmokeAssertLatestCommand,
-} from "./upload-smoke-assert-latest";
 import { UploadAbort, uploadAbortCommand } from "./upload-abort";
 import { UploadComplete, uploadCompleteCommand } from "./upload-complete";
 import { UploadData, uploadDataCommand } from "./upload-data";
 import { UploadNew, uploadNewCommand } from "./upload-new";
+import {
+  UploadSmokeAssertLatest,
+  uploadSmokeAssertLatestCommand,
+} from "./upload-smoke-assert-latest";
 
 export { StaticWebTriggerResponse } from "./common";
 
 const commandRegistry: WebTriggerRegistry = {
+  "import-smoke-assert": importSmokeAssertCommand,
+  "import-smoke-cleanup": importSmokeCleanupCommand,
+  "import-start": importStartCommand,
   "kvs-delete": kvsDeleteCommand,
-  "prune": pruneCommand,
+  prune: pruneCommand,
   "upload-abort": uploadAbortCommand,
   "upload-complete": uploadCompleteCommand,
   "upload-data": uploadDataCommand,
@@ -27,6 +39,9 @@ const commandRegistry: WebTriggerRegistry = {
 };
 
 const WebTriggerActionZod = z.discriminatedUnion("type", [
+  ImportSmokeAssert,
+  ImportSmokeCleanup,
+  ImportStart,
   KvsDelete,
   Prune,
   UploadAbort,
@@ -77,7 +92,9 @@ export const parse = (json: string | undefined): WebTriggerAction => {
     return WebTriggerActionZod.parse(parsed);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      throw new BadRequestValidationError(`parse failed ${err.message}`, { cause: err });
+      throw new BadRequestValidationError(`parse failed ${err.message}`, {
+        cause: err,
+      });
     }
     throw err;
   }

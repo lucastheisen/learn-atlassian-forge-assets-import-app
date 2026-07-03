@@ -11,6 +11,7 @@
     "generate:assets-schema-and-mapping": "npm --prefix scripts run generate:assets-schema-and-mapping",
     "generate:secret-key": "npm --prefix scripts run generate:secret-key",
     "lint": "biome lint && forge lint",
+    "smoke:import": "npm --prefix scripts run smoke:import",
     "smoke:upload": "npm --prefix scripts run smoke:upload",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

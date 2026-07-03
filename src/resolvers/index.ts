@@ -1,10 +1,15 @@
 import api, { route } from "@forge/api";
-import { kvs } from '@forge/kvs';
-import Resolver from '@forge/resolver';
-import { assetsClient, unwrap } from "../lib/forge-clients"
-import { getSchemaAndMapping, mapSchema, setSchemaAndMapping, unmapSchema } from "../lib/schema-mapping";
-import { controllerQueue } from './controller-resolver';
-import { getLatestManifest } from "../lib/kv-data";
+import { kvs } from "@forge/kvs";
+import Resolver from "@forge/resolver";
+import { type AssetsClient, assetsClient, unwrap } from "../lib/forge-clients";
+import { getLatestManifest, type ImportManifest } from "../lib/kv-data";
+import {
+  getSchemaAndMapping,
+  mapSchema,
+  setSchemaAndMapping,
+  unmapSchema,
+} from "../lib/schema-mapping";
+import { workerQueue } from "./worker-resolver";
 
 const resolver = new Resolver();
 
@@ -26,14 +31,19 @@ export interface Config {
 //   ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
 //   $
 export interface ImportContext {
-  importId: string
-  workspaceId: string
+  importId: string;
+  workspaceId: string;
 }
 
-resolver.define('getConfig', async(req) => {
-  console.log(`getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
+resolver.define("getConfig", async (req) => {
+  console.log(
+    `getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
+  );
 
-  const key = configKey(req.context.extension.workspaceId, req.context.extension.importId);
+  const key = configKey(
+    req.context.extension.workspaceId,
+    req.context.extension.importId,
+  );
   const raw = await kvs.getSecret<string>(key);
   console.log(`loaded <<<${raw}>>>`);
 
@@ -41,9 +51,12 @@ resolver.define('getConfig', async(req) => {
     unmapSchema(
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
-        req.context.extension.importId)),
-    (_, value) => value === undefined ? null : value,
-    2);
+        req.context.extension.importId,
+      ),
+    ),
+    (_, value) => (value === undefined ? null : value),
+    2,
+  );
   console.log(`mapping is: ${mapping}`);
 
   if (!raw) {
@@ -62,16 +75,18 @@ resolver.define('getConfig', async(req) => {
     importData: config.importData,
     mapping: mapping,
   };
-})
+});
 
-resolver.define('getText', (req) => {
+resolver.define("getText", (req) => {
   console.log(req);
   return `Hello! Your payload is ${req.payload.example}`;
 });
 
-resolver.define('newToken', async (req) => {
+resolver.define("newToken", async (req) => {
   // https://developer.atlassian.com/cloud/assets/rest/api-group-importsource/#api-importsource-importsourceid-token-post
-  console.log(`generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
+  console.log(
+    `generating new token for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
+  );
   console.log(req);
   const resp = await api
     .asApp()
@@ -79,30 +94,37 @@ resolver.define('newToken', async (req) => {
       route`/jsm/assets/workspace/${req.context.extension.workspaceId}/v1/importsource/${req.context.extension.importId}/token`,
       {
         method: "POST",
-      }
+      },
     );
   const data = await resp.json();
   return data.token;
 });
 
-resolver.define('setConfig', async(req) => {
-  console.log(`saving configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`);
+resolver.define("setConfig", async (req) => {
+  console.log(
+    `saving configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
+  );
 
-  const key = configKey(req.context.extension.workspaceId, req.context.extension.importId);
+  const key = configKey(
+    req.context.extension.workspaceId,
+    req.context.extension.importId,
+  );
   const raw = await kvs.getSecret<string>(key);
 
   const config = raw ? JSON.parse(raw) : {};
   const newConfig = {
     accessKeyId: req.payload.accessKeyId,
-    secretAccessKey: req.payload.isEditSecretAccessKey ? req.payload.secretAccessKey : config.secretAccessKey,
+    secretAccessKey: req.payload.isEditSecretAccessKey
+      ? req.payload.secretAccessKey
+      : config.secretAccessKey,
     importData: req.payload.importData,
-  }
+  };
 
   const newValue = JSON.stringify(newConfig);
   console.log(`saving <<<${newValue}>>>`);
   await kvs.setSecret(key, newValue);
 
-  const mapping = JSON.parse(req.payload.mapping)
+  const mapping = JSON.parse(req.payload.mapping);
 
   await setSchemaAndMapping(
     req.context.extension.workspaceId,
@@ -110,136 +132,172 @@ resolver.define('setConfig', async(req) => {
     mapSchema(
       await getSchemaAndMapping(
         req.context.extension.workspaceId,
-        req.context.extension.importId),
-      mapping))
+        req.context.extension.importId,
+      ),
+      mapping,
+    ),
+  );
 
-  return { ok: true }
-})
+  return { ok: true };
+});
 
-export const configKey = (workspaceId: string, importId: string) => `assets-import-config:${workspaceId}:${importId}`;
+export const configKey = (workspaceId: string, importId: string) =>
+  `assets-import-config:${workspaceId}:${importId}`;
 
 export const handler = resolver.getDefinitions();
 
 export const onDeleteImport = async (context: ImportContext) => {
-  console.log('import with id ', `${context.importId} got deleted`);
+  console.log("import with id ", `${context.importId} got deleted`);
 
   return {
-    result: 'on delete import'
+    result: "on delete import",
   };
+};
+
+export interface BeginImportParams {
+  workspaceId: string;
+  importSourceId: string;
+  manifest: ImportManifest;
+}
+
+// Creates an import execution against the given import source and pushes the
+// first worker queue item to drive it. Shared by startImport (the real module
+// hook, sourced from getLatestManifest()) and the import-start webtrigger
+// command (sourced from getLatestManifest() or getLatestTestManifest()
+// depending on its testing flag) — see src/lib/kv-data.ts for why those two
+// manifest sources never overlap.
+// Logs the most recently created execution's status, purely for diagnostics —
+// nothing branches on this value. Best-effort: this 404s when the import
+// source has never had an execution (e.g. its first-ever run), and that must
+// not block starting the import.
+const logExecutionStatus = async (
+  client: AssetsClient,
+  importSourceId: string,
+  label: string,
+): Promise<void> => {
+  const { data, error } = await client.GET(
+    "/importsource/{importSourceId}/executions/status",
+    {
+      headers: {
+        Accept: "application/json",
+      },
+      params: {
+        path: {
+          importSourceId: importSourceId,
+        },
+      },
+    },
+  );
+
+  if (error) {
+    console.log(`${label}, unable to fetch latest execution status: `, error);
+    return;
+  }
+  console.log(`${label}, import with id has latest execution: `, data);
+};
+
+export const beginImport = async ({
+  workspaceId,
+  importSourceId,
+  manifest,
+}: BeginImportParams): Promise<void> => {
+  const client = assetsClient(workspaceId);
+
+  await logExecutionStatus(client, importSourceId, "BEFORE STARTING");
+  console.log("starting import with manifest: ", manifest);
+
+  const startInfo = await unwrap(
+    client.POST("/importsource/{importSourceId}/executions", {
+      headers: {
+        Accept: "application/json",
+      },
+      params: {
+        path: {
+          importSourceId: importSourceId,
+        },
+      },
+    }),
+  );
+
+  // executionId is the only part of this link that isn't already known —
+  // workspaceId/importSourceId are the trusted params this function was called with.
+  const executionIdMatch = new URL(
+    startInfo.links.submitProgress,
+  ).pathname.match(/\/executions\/(?<executionId>[^/]+)\//);
+  if (!executionIdMatch?.groups?.executionId) {
+    throw new Error(
+      `invalid execution submitProgress link: ${startInfo.links.submitProgress}`,
+    );
+  }
+  const { executionId } = executionIdMatch.groups;
+
+  // Push event onto worker queue to start data ingestion process
+  const job = await workerQueue.push({
+    body: {
+      importSourceId: importSourceId,
+      workspaceId: workspaceId,
+      executionId: executionId,
+      manifest: manifest,
+      index: 0,
+    },
+  });
+  console.log(`Pushed worker queue event with id ${job.jobId}`);
+
+  await logExecutionStatus(client, importSourceId, "AFTER STARTING");
 };
 
 // This begins an import, and is triggered by the _Import data_ button of an
 // import instance in the _Schema settings_ -> _Import_ tab.
-export const startImport = async (context: ImportContext, ...args: unknown[]) => {
+export const startImport = async (
+  context: ImportContext,
+  ...args: unknown[]
+) => {
   console.debug(
-    `start import: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
+    `start import: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`,
   );
-  console.log('import with id ', `${context.importId} got started`);
+  console.log("import with id ", `${context.importId} got started`);
 
-  const manifest = await getLatestManifest()
+  const manifest = await getLatestManifest();
   if (manifest === undefined) {
     throw new Error("no import manifest found");
   }
 
+  await beginImport({
+    workspaceId: context.workspaceId,
+    importSourceId: context.importId,
+    manifest,
+  });
+
+  return {
+    result: "start import",
+  };
+};
+
+// This cancels the current execution of an import.
+export const stopImport = async (context: ImportContext) => {
+  console.log("import with id ", `${context.importId} got stopped`);
+
   const client = assetsClient(context.workspaceId);
-
-  const statusBefore = await unwrap(client.GET(
-    "/importsource/{importSourceId}/executions/status",
-    {
-        headers: {
-          "Accept": "application/json",
-        },
-        params: {
-          path: {
-            importSourceId: context.importId,
-          },
-        },
-    }));
-
-  console.log('BEFORE STARTING, import with id has latest execution: ', statusBefore, 'with manifest: ', manifest);
-
-  const startInfo = await unwrap(client.POST(
-    "/importsource/{importSourceId}/executions",
-    {
+  const status = await unwrap(
+    client.GET("/importsource/{importSourceId}/executions/status", {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
       params: {
         path: {
           importSourceId: context.importId,
         },
       },
-    }));
-
-  const idsMatch = new URL(startInfo.links.submitProgress).pathname.match(
-    /\/workspace\/(?<workspaceId>[^/]+)\/v1\/importsource\/(?<importSourceId>[^/]+)\/executions\/(?<executionId>[^/]+)\//
+    }),
   );
-  if (
-      !idsMatch?.groups?.workspaceId
-      || !idsMatch?.groups?.importSourceId
-      || !idsMatch?.groups?.executionId) {
-    throw new Error(`invalid execution submitProgress link: ${startInfo.links.submitProgress}`);
-  }
-  const { workspaceId, importSourceId, executionId } = idsMatch.groups;
+  console.log("import with id has latest execution: ", status);
 
-  // Push event onto controller queue to start data ingestion process
-  const job = await controllerQueue.push(
-    {
-      body: {
-        importSourceId: importSourceId,
-        workspaceId: workspaceId,
-        executionId: executionId,
-        manifest: manifest,
-        index: 0,
-      }
-    });
-  console.log(`Pushed queueControllerEvent with id ${job.jobId}`);
-
-  setJobId(importSourceId, job.jobId)
-
-  const statusAfter = await unwrap(client.GET(
-    "/importsource/{importSourceId}/executions/status",
-    {
+  await unwrap(
+    client.DELETE(
+      "/importsource/{importSourceId}/executions/{importExecutionId}",
+      {
         headers: {
-          "Accept": "application/json",
-        },
-        params: {
-          path: {
-            importSourceId: context.importId,
-          },
-        },
-    }));
-  console.log('AFTER STARTING, import with id has latest execution: ', statusAfter);
-
-  return {
-    result: 'start import'
-  };
-};
-
-// This cancels the current execution of an import.
-export const stopImport = async (context: ImportContext) => {
-  console.log('import with id ', `${context.importId} got stopped`);
-
-  const client = assetsClient(context.workspaceId);
-  const status = await unwrap(client.GET(
-    "/importsource/{importSourceId}/executions/status",
-    {
-        headers: {
-          "Accept": "application/json",
-        },
-        params: {
-          path: {
-            importSourceId: context.importId,
-          },
-        },
-    }));
-  console.log('import with id has latest execution: ', status);
-
-  await unwrap(client.DELETE(
-    "/importsource/{importSourceId}/executions/{importExecutionId}",
-    {
-        headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
         },
         params: {
           path: {
@@ -247,20 +305,25 @@ export const stopImport = async (context: ImportContext) => {
             importExecutionId: status.executionId,
           },
         },
-    }));
+      },
+    ),
+  );
 
   return {
-    result: 'stop import'
+    result: "stop import",
   };
 };
 
 // This is the status of an import itself, NOT the status of an _execution_
 // of an import.
-export const importStatus = async (context: ImportContext, ...args: unknown[]) => {
+export const importStatus = async (
+  context: ImportContext,
+  ...args: unknown[]
+) => {
   console.debug(
-    `import status: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`
+    `import status: ${JSON.stringify(context, null, 2)}, remaining args: ${JSON.stringify(args, null, 2)}`,
   );
-  const status = 'READY';
+  const status = "READY";
 
   //const client = assetsClient(context.workspaceId);
   //const { data, error } = await client.POST(
@@ -284,25 +347,12 @@ export const importStatus = async (context: ImportContext, ...args: unknown[]) =
 
   //const startInfo = data as StartInfo;
 
-  console.log(`import with id `, `${context.importId} sending import progress ${status}`);
+  console.log(
+    `import with id `,
+    `${context.importId} sending import progress ${status}`,
+  );
 
   return {
-    status: status
+    status: status,
   };
 };
-
-const deleteJobId = async (importSourceId: string) => {
-  return await kvs.delete(jobKey(importSourceId));
-}
-
-const getJobId = async (importSourceId: string) => {
-  return await kvs.get<string>(jobKey(importSourceId));
-}
-
-const setJobId = async (importSourceId: string, jobId: string) => {
-  await kvs.set(jobKey(importSourceId), jobId);
-}
-
-const jobKey = (importSourceId: string) => {
-  return `import:${importSourceId}:jobId`
-}

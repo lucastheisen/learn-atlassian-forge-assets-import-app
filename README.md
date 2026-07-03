@@ -1,5 +1,7 @@
 # User Asset Synchronization
 
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and smoke test setup.
+
 ## Design
 
 This seems silly because it still requires additional work unless we have direct access to the user data (would require edge proxy or some other access approach).
@@ -50,19 +52,26 @@ So the _only_ value of this import process would be that _IF_ we can get the edg
    1. Lookup latest import manifest
       1. If older than last execution, fail
          1. MAY just check for older than last _scheduled_ execution, or MAY look for last successfule execution if that information is stored somewhere
-      1. If newer than last execution, submit request to controller queue
-1. Controller queue receives workspaceId/importsourceId/executionId/manifest
-   1. Submits data load to worker queue
-   1. Submits monitor task to controller queue watching for completion
+      1. If newer than last execution, submit request to worker queue
 1. Worker queue recieves workspaceId/importsourceId/executionId/manifest/currentDataIndex
    1. Worker gets KV key from manifest at currentDataIndex
    1. If currentIndex is last index
       1. Worker submits value from key as data to import
-         1. Worker sets `completed=true` on value
-      1. Worker submits next index to worker queue
+         1. Worker sets `completed=true` on value, telling the Assets backend it has received the final chunk and may begin the (asynchronous) import work
+      1. Worker does NOT submit a next index; the chain ends here
    1. If currentIndex is NOT last index
       1. Worker submits value from key as data to import
       1. Worker updates progress
       1. Worker submits next index to worker queue
-1. Controller queue monitor task waits until import is complete
-1. Upon completion controller queue does something to update users reference
+
+There used to be a separate controller queue here, mirroring Atlassian's `assetsImportType` template: push to worker queue, then re-push to itself with a delay until worker items complete, then call the Assets API to signal completion.
+That pattern exists to handle cases where the total item count isn't known up front (external pagination) and/or work is dispatched concurrently, so nothing can synchronously say "this was the last item".
+Neither applies here.
+The manifest's total count is known before the worker chain starts, and the chain is strictly serial, so the worker itself deterministically knows when it's on the last index and sets `completed=true` directly.
+The controller queue added an extra hop with no value and was removed.
+
+Note `completed=true` only tells the backend "you have every chunk, you may start importing" — it does not mean CMDB has finished ingesting.
+If a future feature needs to react to the import actually finishing (e.g. the bolt-on reference-sync work below), it will need to poll `/importsource/{id}/executions/status` for a terminal state (Done/Failed/etc), most likely via a delayed self-requeuing queue kicked off by the worker's last batch.
+That is a different responsibility than the old controller queue (watching Atlassian's execution state vs. watching our own worker items) and should be added if/when that feature is actually built.
+
+1. Upon (actual, backend-confirmed) completion, something does the bolt-on work to update users reference
