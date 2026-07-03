@@ -16,14 +16,9 @@ export interface Config {
   mapping: string;
 }
 
-// seems to be defined here:
-//   https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-service-management-assets-import-type/
-// but also no types found in current deps:
-//   ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
-//   $ grep -rE 'workspaceId\??:' node_modules/@forge/ -C 10 | grep schema
-//
-//   ltheisen@mm292985-pc ~/egit/lucastheisen-learn-atlassian-forge-assets-import-app
-//   $
+// Manually defined: this shape is documented at
+// https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-service-management-assets-import-type/
+// but no corresponding type ships in the @forge dependencies.
 export interface ImportContext {
   importId: string;
   workspaceId: string;
