@@ -1,5 +1,4 @@
 import api, { route } from "@forge/api";
-import { kvs } from "@forge/kvs";
 import Resolver from "@forge/resolver";
 import { type AssetsClient, assetsClient, unwrap } from "../lib/forge-clients";
 import { getLatestManifest, type ImportManifest } from "../lib/kv-data";
@@ -16,8 +15,6 @@ const resolver = new Resolver();
 export interface Config {
   // json string
   mapping: string;
-  // json string
-  importData: string;
 }
 
 // seems to be defined here:
@@ -38,13 +35,6 @@ resolver.define("getConfig", async (req) => {
     `getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
   );
 
-  const key = configKey(
-    req.context.extension.workspaceId,
-    req.context.extension.importId,
-  );
-  const raw = await kvs.getSecret<string>(key);
-  console.log(`loaded <<<${raw}>>>`);
-
   const mapping = JSON.stringify(
     unmapSchema(
       await getSchemaAndMapping(
@@ -57,16 +47,7 @@ resolver.define("getConfig", async (req) => {
   );
   console.log(`mapping is: ${mapping}`);
 
-  if (!raw) {
-    return {
-      importData: "",
-      mapping: mapping,
-    };
-  }
-
-  const config = JSON.parse(raw);
   return {
-    importData: config.importData,
     mapping: mapping,
   };
 });
@@ -99,19 +80,6 @@ resolver.define("setConfig", async (req) => {
     `saving configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
   );
 
-  const key = configKey(
-    req.context.extension.workspaceId,
-    req.context.extension.importId,
-  );
-
-  const newConfig = {
-    importData: req.payload.importData,
-  };
-
-  const newValue = JSON.stringify(newConfig);
-  console.log(`saving <<<${newValue}>>>`);
-  await kvs.setSecret(key, newValue);
-
   const mapping = JSON.parse(req.payload.mapping);
 
   await setSchemaAndMapping(
@@ -128,9 +96,6 @@ resolver.define("setConfig", async (req) => {
 
   return { ok: true };
 });
-
-export const configKey = (workspaceId: string, importId: string) =>
-  `assets-import-config:${workspaceId}:${importId}`;
 
 export const handler = resolver.getDefinitions();
 

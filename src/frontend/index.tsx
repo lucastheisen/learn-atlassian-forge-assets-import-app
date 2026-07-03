@@ -24,7 +24,6 @@ const App = () => {
   const [token, setToken] = useState<string | null>(null);
 
   const [mapping, setMapping] = useState('');
-  const [importData, setImportData] = useState('');
 
   const generateToken = async () => {
     setToken("Generating token...")
@@ -35,7 +34,6 @@ const App = () => {
     console.log('submit button clicked');
     await invoke('setConfig', {
       mapping: mapping,
-      importData: importData,
     })
   };
 
@@ -47,7 +45,6 @@ const App = () => {
         (config) =>
         {
           setMapping(config.mapping);
-          setImportData(config.importData);
         });
   }, []);
 
@@ -84,15 +81,6 @@ const App = () => {
           id="mapping"
           value={mapping}
           onChange={(e) => setMapping(e.target.value)}
-        />
-      </FormSection>
-      <FormSection>
-        <Label labelFor="importData">Import Data</Label>
-        <TextArea
-          name="importData"
-          id="importData"
-          value={importData}
-          onChange={(e) => setImportData(e.target.value)}
         />
       </FormSection>
       <FormFooter>
