@@ -33,17 +33,20 @@ export interface ImportManifestTotals {
   records: number;
 }
 
-export const getData = async (
+// Import data is arbitrary caller-supplied JSON, opaque to this code — its
+// real shape is defined entirely by whatever mapping/selector is configured
+// for this import, not by anything this app validates or assumes.
+export const getImportData = async (
   manifest: ImportManifest,
   index: number,
-): Promise<object | undefined> => {
+): Promise<Record<string, unknown> | undefined> => {
   const key = manifest.data[index]?.key;
   if (key === undefined) {
     return undefined;
   }
 
   try {
-    return await kvs.get<object>(key);
+    return await kvs.get<Record<string, unknown>>(key);
   } catch (err) {
     throw new DataAccessError(
       "KVS_GET_IMPORT_DATA_FAILED",

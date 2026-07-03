@@ -2328,6 +2328,25 @@ export interface components {
             executionId: string;
             status: components["schemas"]["ImportExecutionStatus"];
         };
+        ImportDataRequest: {
+            /** @description Arbitrary, caller-defined structure — shape is determined by whatever mapping/selector is configured for this import. */
+            data: {
+                [key: string]: unknown;
+            };
+            clientGeneratedId?: string;
+            completed: boolean;
+        };
+        ImportProgressRequest: {
+            steps?: {
+                total?: number;
+                current?: number;
+                description?: string;
+            };
+            objects?: {
+                total?: number;
+                processed?: number;
+            };
+        };
     };
     responses: {
         /** @description The system cannot fulfill the request due to validation errors. See the response body for more details. */
@@ -3929,7 +3948,7 @@ export interface operations {
                  *       }
                  *     }
                  */
-                "application/json": unknown;
+                "application/json": components["schemas"]["ImportProgressRequest"];
             };
         };
         responses: {
@@ -3983,7 +4002,7 @@ export interface operations {
                  *       "completed": true
                  *     }
                  */
-                "application/json": unknown;
+                "application/json": components["schemas"]["ImportDataRequest"];
             };
         };
         responses: {

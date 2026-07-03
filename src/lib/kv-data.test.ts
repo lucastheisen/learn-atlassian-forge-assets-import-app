@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { type GetOptions, kvs } from "@forge/kvs";
 import type { ImportManifest } from "./kv-data";
-import { getData, getLatestManifest, getLatestTestManifest, prune } from "./kv-data";
+import { getImportData, getLatestManifest, getLatestTestManifest, prune } from "./kv-data";
 import { deleteAllValues, getAllValues, iterateAllValues } from "./kv-common";
 import { DataAccessError } from "./errors";
 
@@ -52,9 +52,9 @@ describe("kv-data", () => {
     vi.clearAllMocks();
   });
 
-  describe("getData", () => {
+  describe("getImportData", () => {
     it("returns undefined when the manifest does not have data at the requested index", async () => {
-      const result = await getData(
+      const result = await getImportData(
         {
           uploadId: "upload-id",
           testing: false,
@@ -74,7 +74,7 @@ describe("kv-data", () => {
         users: [{ email: "smoke-user-001@example.invalid" }],
       });
 
-      const result = await getData(
+      const result = await getImportData(
         {
           uploadId: "upload-id",
           testing: false,
@@ -92,10 +92,10 @@ describe("kv-data", () => {
       });
     });
 
-    it("wraps kvs.get failures in getData as DataAccessError", async () => {
+    it("wraps kvs.get failures in getImportData as DataAccessError", async () => {
       getMock.mockRejectedValueOnce(new Error("boom"));
 
-      const promise = getData(
+      const promise = getImportData(
         {
           uploadId: "upload-id",
           testing: false,

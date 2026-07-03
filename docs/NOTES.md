@@ -18,6 +18,15 @@ The underlying developer need is still real: sometimes you need to see what the 
 This needs a new approach that doesn't risk leaking real production data, e.g. an opt-in debug mode gated to non-production environments, or a redaction/truncation step that shows shape/structure without real values.
 Not designed yet — solve it when a concrete debugging need makes the gap painful, rather than speculatively.
 
+## Re-examine countRecords' "one key, array value" assumption
+
+`countRecords` in `src/lib/kv-upload.ts` requires each `upload-data` chunk to have exactly one top-level key whose value is an array, used to count records for manifest totals.
+That's validation this app's own webtrigger imposes on upload chunks — it is not a documented requirement of the Assets API's `/importsource/{id}/executions/{id}/data` endpoint itself.
+
+The Assets API's mapping model appears to support a `selector` that can reference a nested path (e.g. `foo.bar`), which implies a single import document could plausibly contain multiple named/nested collections for different object types, not just one flat top-level array.
+If that's right, `countRecords`'s constraint may be an early, narrower-than-necessary assumption (possibly from when this app only handled one object type) rather than a real limit.
+Not verified against the live API — worth revisiting if/when this app needs to support more than one object type per import, or a nested selector.
+
 ## Considerations for User Sync
 
 1. Need to ingest user data

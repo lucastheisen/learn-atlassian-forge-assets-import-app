@@ -3,8 +3,6 @@ import { deleteAllValues, getAllValues } from "./kv-common";
 import { ArgumentError, DataAccessError, InvalidOperationError } from "./errors";
 import { type ImportManifest, importManifestKey } from "./kv-data";
 
-// CODE_REVIEW_CATCH_ME: need to add error handling for kvs calls, i think they throw
-// ForgeKvsError or ForgeKvsAPIError (probably the later which allows discrimination)
 interface UploadDataManifest {
   index: number;
   key: string;

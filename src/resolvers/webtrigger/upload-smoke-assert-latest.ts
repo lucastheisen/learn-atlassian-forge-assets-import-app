@@ -1,5 +1,5 @@
 import z from "zod";
-import { getData, getLatestTestManifest } from "../../lib/kv-data";
+import { getImportData, getLatestTestManifest } from "../../lib/kv-data";
 import { Command, staticWebTriggerResponseSuccess } from "./common";
 import { BadRequestError, InternalServerError } from "./errors";
 
@@ -33,7 +33,7 @@ export const uploadSmokeAssertLatestCommand: Command<
 
   if (action.expectedTopLevelKey !== undefined) {
     for (let index = 0; index < latest.data.length; index += 1) {
-      const data = await getData(latest, index);
+      const data = await getImportData(latest, index);
 
       if (data === undefined) {
         throw new InternalServerError(`manifest data at index ${index} could not be loaded`);

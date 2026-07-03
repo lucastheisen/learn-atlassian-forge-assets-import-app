@@ -1,0 +1,65 @@
+[
+  {
+    "op": "add",
+    "path": "/components/schemas/ImportDataRequest",
+    "value": {
+      "type": "object",
+      "required": ["data", "completed"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Arbitrary, caller-defined structure — shape is determined by whatever mapping/selector is configured for this import.",
+          "additionalProperties": true
+        },
+        "clientGeneratedId": {
+          "type": "string"
+        },
+        "completed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "op": "add",
+    "path": "/paths/~1importsource~1{importSourceId}~1executions~1{importExecutionId}~1data/post/requestBody/content/application~1json/schema",
+    "value": {
+      "$ref": "#/components/schemas/ImportDataRequest"
+    }
+  },
+  {
+    "op": "add",
+    "path": "/components/schemas/ImportProgressRequest",
+    "value": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "number" },
+            "current": { "type": "number" },
+            "description": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "objects": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "number" },
+            "processed": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "op": "add",
+    "path": "/paths/~1importsource~1{importSourceId}~1executions~1{importExecutionId}~1progress/put/requestBody/content/application~1json/schema",
+    "value": {
+      "$ref": "#/components/schemas/ImportProgressRequest"
+    }
+  }
+]
