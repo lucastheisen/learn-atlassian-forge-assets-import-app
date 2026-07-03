@@ -14,8 +14,6 @@ import { workerQueue } from "./worker-resolver";
 const resolver = new Resolver();
 
 export interface Config {
-  accessKeyId: string;
-  hasSecretAccessKey: boolean;
   // json string
   mapping: string;
   // json string
@@ -61,8 +59,6 @@ resolver.define("getConfig", async (req) => {
 
   if (!raw) {
     return {
-      accessKeyId: "",
-      hasSecretAccessKey: false,
       importData: "",
       mapping: mapping,
     };
@@ -70,8 +66,6 @@ resolver.define("getConfig", async (req) => {
 
   const config = JSON.parse(raw);
   return {
-    accessKeyId: config.accessKeyId,
-    hasSecretAccessKey: !!config.secretAccessKey,
     importData: config.importData,
     mapping: mapping,
   };
@@ -109,14 +103,8 @@ resolver.define("setConfig", async (req) => {
     req.context.extension.workspaceId,
     req.context.extension.importId,
   );
-  const raw = await kvs.getSecret<string>(key);
 
-  const config = raw ? JSON.parse(raw) : {};
   const newConfig = {
-    accessKeyId: req.payload.accessKeyId,
-    secretAccessKey: req.payload.isEditSecretAccessKey
-      ? req.payload.secretAccessKey
-      : config.secretAccessKey,
     importData: req.payload.importData,
   };
 

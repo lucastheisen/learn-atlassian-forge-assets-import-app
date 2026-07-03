@@ -8,13 +8,12 @@ import ForgeReconciler, {
   Form,
   FormFooter,
   FormSection,
-  Inline,
   Label,
   Text,
   TextArea,
   Textfield,
 } from '@forge/react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type {
   Config
 } from '../resolvers/index'
@@ -24,22 +23,8 @@ const App = () => {
   const [context, setContext] = useState<FullContext | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
-  const [accessKeyId, setAccessKeyId] = useState('');
-  const [secretAccessKey, setSecretAccessKey] = useState('');
-  const [isEditSecretAccessKey, setEditSecretAccessKey] = useState(false);
   const [mapping, setMapping] = useState('');
   const [importData, setImportData] = useState('');
-
-  const toggleEditSecretAccessKey = useCallback(async (editable: boolean) => {
-    if (editable) {
-      setSecretAccessKey("")
-      setEditSecretAccessKey(true)
-    }
-    else {
-      setSecretAccessKey("********")
-      setEditSecretAccessKey(false)
-    }
-  }, [])
 
   const generateToken = async () => {
     setToken("Generating token...")
@@ -49,9 +34,6 @@ const App = () => {
   const onSubmit = async () => {
     console.log('submit button clicked');
     await invoke('setConfig', {
-      accessKeyId: accessKeyId,
-      isEditSecretAccessKey: isEditSecretAccessKey,
-      secretAccessKey: secretAccessKey,
       mapping: mapping,
       importData: importData,
     })
@@ -64,8 +46,6 @@ const App = () => {
       .then(
         (config) =>
         {
-          setAccessKeyId(config.accessKeyId);
-          toggleEditSecretAccessKey(!config.hasSecretAccessKey);
           setMapping(config.mapping);
           setImportData(config.importData);
         });
@@ -96,34 +76,6 @@ const App = () => {
         >
           Generate token
         </Button>
-      </FormSection>
-      <FormSection>
-        <Label labelFor="accessKeyId">AWS Access Key ID</Label>
-        <Textfield
-          name="accessKeyId"
-          id="accessKeyId"
-          value={accessKeyId}
-          onChange={(e) => setAccessKeyId(e.target.value)}
-        />
-
-        <Label labelFor="secretAccessKey">AWS Secret Access Key</Label>
-        <Inline>
-          <Textfield
-            id="secretAccessKey"
-            isReadOnly={!isEditSecretAccessKey}
-            name="secretAccessKey"
-            onChange={(e) => setSecretAccessKey(e.target.value)}
-            value={secretAccessKey}
-          />
-          <Button
-            appearance="subtle"
-            iconBefore={isEditSecretAccessKey ? "undo" : "edit"}
-            type="button"
-            onClick={(_e) => toggleEditSecretAccessKey(!isEditSecretAccessKey)}
-          >
-            {null}
-          </Button>
-        </Inline>
       </FormSection>
       <FormSection>
         <Label labelFor="mapping">Mapping</Label>
