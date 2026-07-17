@@ -86,6 +86,25 @@ So it looks like the mapping has to be done using `asApp` and done in two parts:
 1. Lookup by email to get all matching account ids
 1. Lookup email for all matching account ids to confirm exact match
 
+### JSDCLOUD-10487 vs JSDCLOUD-10732 (2026-07)
+
+[JSDCLOUD-10487](https://jira.atlassian.com/browse/JSDCLOUD-10487) ("Allow to use user email address when import user attribute in Assets") was resolved 2026-06-29, and its resolution comment claims email-based resolution "works across all import methods (CSV, Discovery, JSON, and External Import)".
+That reads as if it should fix the exact problem documented above, so we investigated whether it actually does.
+
+It does not, for either integration path this app cares about.
+We tested empirically, using [ad_hoc/issue-2/repro_external_import_user_attribute.sh](../ad_hoc/issue-2/repro_external_import_user_attribute.sh):
+
+1. Against this app's own custom Forge import source (`jiraServiceManagement:assetsImportType`), `Atlassian User` (a `User`-type attribute) is absent from `GET .../importsource/{id}/schema-and-mapping`, even though the general Assets API (`GET .../objecttype/{id}/attributes`) confirms it exists (`type: 2` / User).
+   Directly `PATCH`ing a mapping entry for it anyway (using its real numeric attribute id as `attributeExternalId`) is rejected server-side with `dataValidationErrors[].code == UNKNOWN_EXTERNAL_ID_MAPPING` — the attribute has no `externalId` in the import-mapping system at all, unlike every other attribute (which use a `cmdb::externalId/<uuid>` scheme).
+2. Against a genuine native **External Import** source (Import tab → Create Import → External Import, authenticated with its own bearer token, no custom app involved) on the same schema/object type, the result is identical: same absence from `schema-and-mapping`, same `UNKNOWN_EXTERNAL_ID_MAPPING` rejection.
+
+So there is no divergence between custom Forge apps and native External Import here — both are blocked identically.
+The actual blocker is [JSDCLOUD-10732](https://jira.atlassian.com/browse/JSDCLOUD-10732) ("Add support to User type attributes on External/Discovery Import"), which remains unresolved as of a comment from 2026-06-16.
+JSDCLOUD-10487's "all import methods" claim does not hold for this integration surface, regardless of which import mechanism is used.
+
+This is tracked as [GitHub issue #2](https://github.com/lucastheisen/learn-atlassian-forge-assets-import-app/issues/2), and written up on [this community thread](https://community.developer.atlassian.com/t/how-can-i-get-a-user-reference-attribute-to-synchronize-from-an-incoming-mapping-via-email-address/100676).
+Until JSDCLOUD-10732 is resolved, the bolt-on post-import reference-sync design below (see "Considerations for User Sync") remains the only viable approach.
+
 The basic approach is outlined by this (working) web trigger:
 
 ```javascript

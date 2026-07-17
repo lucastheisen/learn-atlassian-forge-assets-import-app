@@ -52,6 +52,9 @@ The smoke test code expects the exact names below.
    - `Phone` (Text)
    - `Title` (Text)
    - `Active` (Boolean)
+   - `Atlassian User` (User)
+     - Not resolvable via this import source yet — see [issue #2](https://github.com/lucastheisen/learn-atlassian-forge-assets-import-app/issues/2).
+       Kept here anyway since we intend to populate it, either once that's fixed upstream or via the bolt-on process in `docs/NOTES.md`.
 4. In the schema's settings, open the **Import** tab and add an import configuration, picking this Forge app.
    This is the step that mints a new `importSourceId` isolated from the real one — there is no API to create an import source, only this UI wizard.
 5. Open that import configuration's app screen (it loads this app's own `getConfig`/`setConfig` UI) and paste this into the mapping editor for `Smoke User`:
@@ -67,7 +70,8 @@ The smoke test code expects the exact names below.
          "Email": ["email"],
          "Phone": ["phone"],
          "Title": ["title"],
-         "Active": ["active"]
+         "Active": ["active"],
+         "Atlassian User": ["email"]
        },
        "objectTypeName": "Smoke User",
        "selector": "users"
@@ -76,6 +80,8 @@ The smoke test code expects the exact names below.
    ```
 
    The right-hand side of each `attributeMap` entry is the field name from `scripts/lib/smoke-users.ts`'s `buildUsersChunk`; `selector: "users"` picks out the `users` array that function nests its records under.
+   `Atlassian User` is included for forward-compatibility but currently has no effect — the schema-and-mapping endpoint doesn't expose User-type attributes, so this app's own mapping logic silently drops it (see `issue #2`, linked above).
+   The import still succeeds with it left unresolved/empty.
    `scripts/smoke-import.ts` overrides `title` per run to a unique run id, since that's how its `import-smoke-assert`/`import-smoke-cleanup` calls scope themselves to only the objects a given run created.
 6. The same app screen displays `ImportId` and `WorkspaceId` at the top — export them as environment variables:
    - `FORGE_SMOKE_WORKSPACE_ID`: the displayed `WorkspaceId`

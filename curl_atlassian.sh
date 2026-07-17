@@ -60,6 +60,17 @@ function curl_assets {
   local path_and_query="$1"
   local curl_args=("${@:2}")
 
+  # imports/info is actually not in the regular part of the Assets REST API, but
+  # is the proper first step for performing an _External Import_:
+  #   https://developer.atlassian.com/cloud/assets/imports-rest-api-guide/workflow/#step-2--verify-your-container-token
+  if [[ "${path_and_query}" == "imports/info" ]]; then
+    run_curl \
+      "$(auth_assets_importsource)" \
+      "https://api.atlassian.com/jsm/assets/v1/imports/info" \
+      "${curl_args[@]}"
+    return
+  fi
+
   local url="$(assets_url "${path_and_query}")"
   case "${path_and_query%%/*}" in
     importsource) run_curl "$(auth_assets_importsource)" "${url}" "${curl_args[@]}";;
