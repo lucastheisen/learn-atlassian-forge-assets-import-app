@@ -59,11 +59,13 @@ The extra dependency staging is the main reason to prefer a bundled backend.
 7. Align the standalone scripts with TypeScript 6 using their separate npm package.
 8. Provide a build command that runs type checking before producing deployment artifacts.
    Document build, validation, and development deployment commands in `docs/DEVELOPMENT.md`.
+9. Embed a deterministic build ID in both packages and display the UI and deployed backend IDs in the configuration screen.
+   Include uncommitted source changes in the fingerprint so the deployed build can be compared with the working tree.
 
 ## Out of scope
 
 - Adding CI workflows.
-- Changing import behavior or the configuration UI.
+- Changing import behavior or the configuration mapping workflow.
 - Migrating to TypeScript 7 or changing package managers.
 - Refactoring JWT authentication or unrelated application code.
 - Changing scopes or production installations.

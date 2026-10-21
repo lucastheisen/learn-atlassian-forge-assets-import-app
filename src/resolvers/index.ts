@@ -7,9 +7,12 @@ import {
   setSchemaAndMapping,
   unmapSchema,
 } from "../lib/schema-mapping";
+import { buildInfo } from "../version";
 import { workerQueue } from "./worker-resolver";
 
 const resolver = new Resolver();
+
+resolver.define("getBuildInfo", () => buildInfo);
 
 export interface Config {
   // json string

@@ -6,6 +6,8 @@
 # Node artifact files
 node_modules/
 dist/
+# Forge lint can scan inside dist, so ignore generated JavaScript explicitly.
+dist/**/*.js
 
 # Compiled Java class files
 *.class

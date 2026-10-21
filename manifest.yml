@@ -1,6 +1,9 @@
 ---
 app:
   id: ari:cloud:ecosystem::app/a830c4dc-a700-401b-96af-e97aeb4b159a
+  package:
+    bundler: manual@2026
+    path: dist/backend
   runtime:
     architecture: arm64
     memoryMB: 256
@@ -96,5 +99,6 @@ permissions:
     - write:cmdb-object:jira
     - storage:app
 resources:
-  - key: main
-    path: src/frontend/index.tsx
+  - bundler: manual@2026
+    key: main
+    path: dist/frontend

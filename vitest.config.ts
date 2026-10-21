@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  define: {
+    __BUILD_INFO__: JSON.stringify({ buildId: 'unit-test', version: 'unit-test' }),
+  },
   test: {
     coverage: {
       include: ["src/**/*.{ts,tsx}"],

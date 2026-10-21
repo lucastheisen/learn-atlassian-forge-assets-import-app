@@ -4,8 +4,65 @@
 
 Follow [these instructions](https://developer.atlassian.com/platform/forge/getting-started/) to set up `node` and the `forge` CLI, then `forge login`.
 
-The standalone scripts under `scripts/` are a separate npm workspace.
-Run `npm install` inside `scripts/` before invoking any of them.
+Use Node 24, matching the Forge runtime.
+Install both npm packages from the repository root:
+
+```sh
+npm ci
+npm --prefix scripts ci
+```
+
+The standalone scripts under `scripts/` have their own package and lockfile.
+Both packages use TypeScript 6 for type checking.
+The scripts package overrides `openapi-typescript`'s TypeScript 5 peer range to use the same compiler.
+API generation has been checked with TypeScript 6 and produces unchanged declarations.
+Recheck `npm run generate:assets-api` when updating either dependency.
+
+## Build and Deploy
+
+Run these commands from the repository root before a development deployment:
+
+```sh
+npm run build
+npm test
+forge lint -e development
+forge deploy --non-interactive --e development
+```
+
+`npm run build` type-checks the app and standalone scripts before building both application packages with Vite.
+`npm run typecheck` runs those checks without building.
+The backend build targets Node 24 and writes CommonJS handlers and bundled dependencies to `dist/backend`.
+The frontend build writes the UI Kit resource to `dist/frontend`, using classic JSX transformation and relative asset paths.
+Both builds include source maps and replace their own output directories.
+
+Keep the explicit TypeScript source globs in `tsconfig.json` so Forge lint selects the source files.
+The generated JavaScript file glob in `.gitignore` keeps Forge lint from parsing the Vite bundles when it scans the UI resource's parent directory.
+
+The manifest uses Forge's [manual packaging preview](https://developer.atlassian.com/platform/forge/manifest-reference/packaging/).
+Forge uploads these outputs without compiling the source files.
+Always rebuild after editing app source or build configuration before running `forge deploy`.
+The packaging tests build in a temporary directory and do not refresh the deployment outputs in `dist`.
+They check handler exports and JWT verification without installed backend dependencies, along with the frontend HTML and JavaScript contract.
+
+After deploying, verify the configuration UI and run the upload smoke test below.
+Run the import smoke test only after configuring its dedicated import source.
+
+### Verify the Deployed Build
+
+Open this app's import configuration screen in Assets and refresh it after deployment.
+The top of the form displays the package version, UI build ID, and backend build ID.
+Both IDs must match the expected ID printed locally for the build being deployed.
+The backend ID is fetched from the deployed resolver, so matching IDs verify both sides of the app.
+A warning appears when they differ, and a failed backend lookup is shown explicitly.
+
+The build ID fingerprints the application source, manifest, dependency lockfile, and build configuration, including uncommitted changes.
+Rebuilding the same inputs produces the same ID.
+Generated deployment output and agent scratch files do not affect it.
+Print the expected ID locally from the repository root:
+
+```sh
+node --input-type=module -e "import { getBuildInfo } from './build-info.mts'; console.log(getBuildInfo(process.cwd()))"
+```
 
 ## Running Scripts
 
@@ -13,7 +70,7 @@ The root `package.json` proxies each script via `npm --prefix scripts run <name>
 See `scripts/package.json` for the full list, and add a matching proxy entry in the root `package.json` for any new script.
 
 Most scripts talk to the deployed app through its webtrigger, so they need `FORGE_WEBTRIGGER_URL` and `FORGE_WEBTRIGGER_SECRET` set in the environment first.
-Local code edits have no effect until you `forge deploy` — see `AGENTS.md > Project > Deployments`.
+Local code edits have no effect until you build and deploy them, as described above.
 
 ## Smoke Tests
 

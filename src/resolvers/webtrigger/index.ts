@@ -23,7 +23,7 @@ import {
   uploadSmokeAssertLatestCommand,
 } from "./upload-smoke-assert-latest";
 
-export { StaticWebTriggerResponse } from "./common";
+export type { StaticWebTriggerResponse } from "./common";
 
 const commandRegistry: WebTriggerRegistry = {
   "import-smoke-assert": importSmokeAssertCommand,

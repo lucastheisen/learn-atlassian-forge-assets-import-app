@@ -5,6 +5,9 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "build": "npm run typecheck && npm run build:backend && npm run build:frontend",
+    "build:backend": "vite build --config vite.backend.config.mts",
+    "build:frontend": "vite build --config vite.frontend.config.mts",
     "clean": "rm -rf ./dist",
     "coverage": "vitest run --coverage",
     "generate:assets-api": "npm --prefix scripts run generate:assets-api",
@@ -14,7 +17,7 @@
     "smoke:import": "npm --prefix scripts run smoke:import",
     "smoke:upload": "npm --prefix scripts run smoke:upload",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && npm --prefix scripts run typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
@@ -22,6 +25,7 @@
     "@types/react": "^18.3.23",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
+    "vite": "^8.3.5",
     "vitest": "^4.1.4"
   },
   "dependencies": {

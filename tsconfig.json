@@ -1,27 +1,26 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "allowJs": false,
     "checkJs": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
     "jsx": "react",
     "lib": ["ES2022"],
     "module": "nodenext",
-    "noEmit": false,
+    "noEmit": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
     "noUncheckedIndexedAccess": true,
-    "outDir": "dist",
     "resolveJsonModule": true,
-    "rootDir": "src",
     "skipLibCheck": true,
-    "sourceMap": true,
     "strict": true,
     "strictNullChecks": true,
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["build-info.mts", "src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "vite.*.config.mts", "vitest.config.ts"]
 }
