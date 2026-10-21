@@ -25,9 +25,12 @@ Run these commands from the repository root before a development deployment:
 ```sh
 npm run build
 npm test
-forge lint -e development
 forge deploy --non-interactive --e development
 ```
+
+[`forge deploy`](https://developer.atlassian.com/platform/forge/cli-reference/deploy/) runs Forge lint as part of its pre-deployment checks.
+Run `forge lint -e development` separately when you want those checks without deploying.
+Forge does not run this project's build or Vitest suite, so `npm run build` and `npm test` remain explicit steps.
 
 `npm run build` type-checks the app and standalone scripts before building both application packages with Vite.
 `npm run typecheck` runs those checks without building.
