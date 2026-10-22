@@ -50,7 +50,7 @@ The extra dependency staging is the main reason to prefer a bundled backend.
    Keep Node built-ins external.
    Preserve source maps for debugging.
 4. Build the frontend as one UI Kit resource with relative asset paths and classic `React.createElement` JSX transformation.
-   Ensure the generated `index.html` contains the required script references in its body.
+   Build directly from `index.tsx` and copy the static `public/index.html` unchanged, with its script reference already in the body.
    Check the generated bundle for browser assumptions that conflict with UI Kit execution.
 5. Rename the JavaScript backend entrypoint to TypeScript so it participates in type checking.
    Correct the existing type re-export and enable checks appropriate to isolated transpilation.

@@ -36,6 +36,9 @@ Forge does not run this project's build or Vitest suite, so `npm run build` and 
 `npm run typecheck` runs those checks without building.
 The backend build targets Node 24 and writes CommonJS handlers and bundled dependencies to `dist/backend`.
 The frontend build writes the UI Kit resource to `dist/frontend`, using classic JSX transformation and relative asset paths.
+Its entrypoint is `src/frontend/index.tsx`, compiled to `dist/frontend/index.js`.
+Vite copies `src/frontend/public/index.html` unchanged into the output directory.
+That HTML already references `./index.js` from its body, as required by Forge UI Kit.
 Both builds include source maps and replace their own output directories.
 
 Keep the explicit TypeScript source globs in `tsconfig.json` so Forge lint selects the source files.

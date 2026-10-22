@@ -7,6 +7,12 @@ export default defineConfig({
     emptyOutDir: true,
     modulePreload: false,
     outDir: resolve(import.meta.dirname, 'dist/frontend'),
+    rolldownOptions: {
+      input: resolve(import.meta.dirname, 'src/frontend/index.tsx'),
+      output: {
+        entryFileNames: 'index.js',
+      },
+    },
     sourcemap: true,
   },
   oxc: {
@@ -14,17 +20,5 @@ export default defineConfig({
       runtime: 'classic',
     },
   },
-  plugins: [{
-    name: 'forge-ui-kit-scripts',
-    transformIndexHtml: {
-      order: 'post',
-      handler(html) {
-        // Forge loads UI Kit scripts from the body rather than the head.
-        const scriptPattern = /<script\b[^>]*\bsrc="[^"]+"[^>]*><\/script>/g;
-        const scripts = html.match(scriptPattern) ?? [];
-        return html.replace(scriptPattern, '').replace('</body>', `${scripts.join('\n')}\n</body>`);
-      },
-    },
-  }],
   root: resolve(import.meta.dirname, 'src/frontend'),
 });

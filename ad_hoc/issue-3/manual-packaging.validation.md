@@ -13,6 +13,7 @@ Configuration UI verification remains pending.
 - All seven manifest handlers load as functions from a temporary backend package outside the repository, without access to its node_modules.
 - Packaged JWT verification reaches request validation for a valid signature and rejects an invalid signature.
 - Frontend entry scripts appear only in the HTML body and use relative paths.
+- Frontend HTML is copied unchanged from `src/frontend/public/index.html` and references the compiled `index.js` entrypoint.
 - Frontend JavaScript passes Node's syntax check, uses classic JSX output, and contains no eager module-preload MutationObserver polyfill.
 - Frontend output has no reserved file or directory names starting with double underscore.
 - API declaration generation with TypeScript 6 produces no changes to tracked generated declarations.

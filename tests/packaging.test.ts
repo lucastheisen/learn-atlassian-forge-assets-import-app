@@ -76,6 +76,7 @@ describe('manual packaging', () => {
     const files = await readdir(frontend, { recursive: true });
     expect(files.some((file) => file.split(/[\\/]/).some((part) => part.startsWith('__')))).toBe(false);
     const html = await readFile(join(frontend, 'index.html'), 'utf8');
+    expect(html).toBe(await readFile(join(root, 'src/frontend/public/index.html'), 'utf8'));
     const body = html.match(/<body>([\s\S]*?)<\/body>/)?.[1] ?? '';
     const scripts = [...body.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*><\/script>/g)];
     expect(scripts).toHaveLength(1);
