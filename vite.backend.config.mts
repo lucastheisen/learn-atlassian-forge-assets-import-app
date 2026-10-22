@@ -8,7 +8,6 @@ export default defineConfig({
     outDir: 'dist/backend',
     rolldownOptions: {
       output: {
-        chunkFileNames: '[name].js',
         entryFileNames: 'index.js',
         format: 'cjs',
       },
