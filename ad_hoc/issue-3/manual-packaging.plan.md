@@ -59,8 +59,9 @@ The extra dependency staging is the main reason to prefer a bundled backend.
 7. Align the standalone scripts with TypeScript 6 using their separate npm package.
 8. Provide a build command that runs type checking before producing deployment artifacts.
    Document build, validation, and development deployment commands in `docs/DEVELOPMENT.md`.
-9. Embed a deterministic build ID in both packages and display the UI and deployed backend IDs in the configuration screen.
-   Include uncommitted source changes in the fingerprint so the deployed build can be compared with the working tree.
+9. Verify a fresh live test against the Forge deployment version using platform invocation metadata.
+   Use the version and environment attributes supplied by Forge.
+10. Document manual npm package version bumps separately from Forge app versioning.
 
 ## Out of scope
 

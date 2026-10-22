@@ -3,7 +3,6 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { getBuildInfo } from '../build-info.mts';
 
 const root = resolve(__dirname, '..');
 let output: string;
@@ -41,7 +40,7 @@ describe('manual packaging', () => {
         const exports = require(join(backend, handler.slice(0, dot) + '.js'));
         assert.equal(typeof exports[handler.slice(dot + 1)], 'function', handler);
       }
-      const { handler, webtriggerDispatch } = require(join(backend, 'index.js'));
+      const { webtriggerDispatch } = require(join(backend, 'index.js'));
       const secret = randomBytes(32).toString('hex');
       process.env.FORGE_WEBTRIGGER_SECRET = secret;
       const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -52,8 +51,6 @@ describe('manual packaging', () => {
       const token = key => unsigned + '.' + createHmac('sha256', key).update(unsigned).digest('base64url');
       console.warn = () => {};
       (async () => {
-        const buildInfo = await handler({ call: { functionKey: 'getBuildInfo' }, context: {} });
-        assert.deepEqual(buildInfo, JSON.parse(process.argv[3]));
         for (const [key, expected] of [
           [secret, 'status-error-bad-request-validate'],
           ['incorrect-secret', 'status-error-unauthorized'],
@@ -65,7 +62,7 @@ describe('manual packaging', () => {
         }
         process.stdout.write('ok');
       })().catch(error => { console.error(error); process.exitCode = 1; });
-    `, JSON.stringify(handlers), join(output, 'backend'), JSON.stringify(getBuildInfo(root))], {
+    `, JSON.stringify(handlers), join(output, 'backend')], {
       cwd: output,
       encoding: 'utf8',
       env: { ...process.env, NODE_PATH: '' },
@@ -88,7 +85,6 @@ describe('manual packaging', () => {
       const path = script[1] ?? '';
       expect(path).toMatch(/^\.\//);
       const code = await readFile(join(frontend, path), 'utf8');
-      expect(code.includes(getBuildInfo(root).buildId)).toBe(true);
       execFileSync(process.execPath, ['--check', join(frontend, path)]);
       expect(code.includes('createElement')).toBe(true);
       expect(code.includes('new MutationObserver')).toBe(false);

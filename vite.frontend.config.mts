@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
-import { getBuildInfo } from './build-info.mts';
 
 export default defineConfig({
   base: './',
@@ -9,9 +8,6 @@ export default defineConfig({
     modulePreload: false,
     outDir: resolve(import.meta.dirname, 'dist/frontend'),
     sourcemap: true,
-  },
-  define: {
-    __BUILD_INFO__: JSON.stringify(getBuildInfo(import.meta.dirname)),
   },
   oxc: {
     jsx: {

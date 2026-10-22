@@ -1,15 +1,15 @@
 # Manual packaging implementation validation
 
 The application implementation is present locally on feat/issue-3-manual-packaging.
-Development deployment completed successfully.
-Live upload and import smoke verification passed.
+The deployment and live smoke results below describe the earlier development deployment and predate this cleanup.
+Deployment and live verification of the cleanup remain pending.
 Configuration UI verification remains pending.
 
 ## Passed locally
 
 - TypeScript 6 checks for application source, build configuration, tests, and standalone scripts.
 - Vite production builds for the Node 24 backend and UI Kit frontend.
-- All 66 tests, including build fingerprint checks and two packaging integration tests.
+- All 63 tests, including two packaging integration tests.
 - All seven manifest handlers load as functions from a temporary backend package outside the repository, without access to its node_modules.
 - Packaged JWT verification reaches request validation for a valid signature and rejects an invalid signature.
 - Frontend entry scripts appear only in the HTML body and use relative paths.
@@ -19,7 +19,6 @@ Configuration UI verification remains pending.
 - npm ci dependency-resolution dry runs for both packages.
 - Biome lint exits successfully with the same 31 warnings and one informational diagnostic as the baseline.
 - git diff --check.
-- The packaged resolver returns the same build ID and package version embedded in the UI bundle.
 
 The scripts package has a scoped override for openapi-typescript's TypeScript peer dependency.
 Its published peer range currently permits only TypeScript 5.
@@ -33,7 +32,8 @@ Actual UI Kit execution still requires verification in a browser.
 
 ## Forge lint
 
-Authenticated `forge lint -e development` completed through the personal-tools MCP service with exit code 0 and `No issues found`.
+For the earlier deployment, authenticated `forge lint -e development` completed through the personal-tools MCP service with exit code 0 and `No issues found`.
+Forge lint for the current cleanup passed on October 22 with exit code 0 and `No issues found` after refreshing the MCP token and unlocking the credential vault.
 The user-side CLI was version 14.0.0 and reported that an update was available.
 
 The initial MCP invocation tried to parse generated backend JavaScript with the source-only TypeScript configuration.
@@ -46,13 +46,8 @@ Both package type checks pass after these configuration changes.
 
 Forge accepted the final packages and reported a successful development deployment, version `5.19.0`.
 Verification remained enabled, including Forge lint during deployment.
-The package version is `1.1.37` and the build ID is `139dd58c242b`.
-The source fingerprint and all nine local artifact checksums were unchanged after deployment.
-
-Refresh the development app's Assets import configuration screen.
-Both UI build and Backend build must show `139dd58c242b`.
-The backend value comes from the deployed resolver.
-A mismatch or lookup failure is displayed explicitly.
+That deployment predates the current cleanup.
+For the next deployment, record its Forge version and correlate a fresh test invocation with the platform log metadata, following `docs/DEVELOPMENT.md`.
 The UI has not yet been verified in a browser.
 
 ## Live smoke verification
@@ -69,8 +64,10 @@ The saved result and both logs were read back and confirmed successful.
 
 These checks verify the live upload and import pipeline.
 They assert object counts and the run tag, rather than every imported attribute value.
-They do not query the deployed build ID or verify the configuration UI.
+Their saved results were not correlated with Forge invocation version metadata and do not verify the configuration UI.
 
 ## Pending
 
-- Configuration UI verification, including matching UI and backend build IDs.
+- Deployment and live verification of the current cleanup.
+- Correlation of a fresh smoke invocation with the expected Forge deployment version.
+- Configuration UI rendering and save verification.

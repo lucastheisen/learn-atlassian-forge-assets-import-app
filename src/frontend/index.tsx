@@ -9,8 +9,6 @@ import ForgeReconciler, {
   FormFooter,
   FormSection,
   Label,
-  SectionMessage,
-  Text,
   TextArea,
   Textfield,
 } from '@forge/react';
@@ -18,11 +16,8 @@ import React, { useEffect, useState } from 'react';
 import type {
   Config
 } from '../resolvers/index'
-import { type BuildInfo, buildInfo } from '../version';
 
 const App = () => {
-  const [backendBuild, setBackendBuild] = useState<BuildInfo | null>(null);
-  const [buildError, setBuildError] = useState(false);
   const [context, setContext] = useState<FullContext | null>(null);
 
   const [mapping, setMapping] = useState('');
@@ -34,7 +29,6 @@ const App = () => {
   };
 
   useEffect(() => {
-    invoke<BuildInfo>('getBuildInfo').then(setBackendBuild).catch(() => setBuildError(true));
     view.getContext().then(setContext);
     invoke<Config>('getConfig')
       .then(
@@ -46,21 +40,6 @@ const App = () => {
 
   return (
     <Form onSubmit={onSubmit}>
-      <FormSection>
-        <Text>App version: {buildInfo.version}</Text>
-        <Text>UI build: {buildInfo.buildId}</Text>
-        <Text>Backend build: {backendBuild?.buildId ?? (buildError ? 'Unavailable' : 'Loading...')}</Text>
-        {buildError && (
-          <SectionMessage appearance="error">
-            <Text>Unable to verify the backend build. Refresh this page to try again.</Text>
-          </SectionMessage>
-        )}
-        {backendBuild && backendBuild.buildId !== buildInfo.buildId && (
-          <SectionMessage appearance="warning">
-            <Text>The UI and backend builds differ. Refresh this page and check the deployment.</Text>
-          </SectionMessage>
-        )}
-      </FormSection>
       <FormSection>
         <Label labelFor="workspaceId">Workspace ID</Label>
         <Textfield

@@ -50,22 +50,59 @@ They check handler exports and JWT verification without installed backend depend
 After deploying, verify the configuration UI and run the upload smoke test below.
 Run the import smoke test only after configuring its dedicated import source.
 
-### Verify the Deployed Build
+### Verify the Deployment
 
-Open this app's import configuration screen in Assets and refresh it after deployment.
-The top of the form displays the package version, UI build ID, and backend build ID.
-Both IDs must match the expected ID printed locally for the build being deployed.
-The backend ID is fetched from the deployed resolver, so matching IDs verify both sides of the app.
-A warning appears when they differ, and a failed backend lookup is shown explicitly.
+Record the target environment, deployment time, and Forge version reported by `forge deploy`.
+The [Deployments page](https://developer.atlassian.com/platform/forge/versions/) in the developer console provides the deployment history.
+Build immediately before deploying so the uploaded packages contain the current changes.
 
-The build ID fingerprints the application source, manifest, dependency lockfile, and build configuration, including uncommitted changes.
-Rebuilding the same inputs produces the same ID.
-Generated deployment output and agent scratch files do not affect it.
-Print the expected ID locally from the repository root:
+After deployment, run a fresh smoke test against that environment.
+In the developer console, use the test execution time, site, and relevant import or worker log messages to find its invocations.
+Check their Version and Environment attributes against the deployment record.
+Forge supplies this metadata, as described in [View app logs](https://developer.atlassian.com/platform/forge/view-app-logs/).
+An earlier successful test or a successful deployment alone does not establish which version handled a new test.
+
+Logs are also available from the repository root:
 
 ```sh
-node --input-type=module -e "import { getBuildInfo } from './build-info.mts'; console.log(getBuildInfo(process.cwd()))"
+forge logs -e development --since 15m --verbose
 ```
+
+These checks identify the backend version that handled the test.
+Refresh the Assets import configuration screen after deployment and verify that the form loads and saves correctly as a separate frontend check.
+
+### Package Versioning
+
+The maintainer updates the root `package.json` version manually when preparing a release.
+Routine development deployments do not require a package version bump.
+Choose a patch increment for compatible bug fixes, a minor increment for compatible features, and a major increment for breaking changes.
+For example, run this from the repository root for a patch release:
+
+```sh
+npm version patch --no-git-tag-version
+```
+
+Use `minor` or `major` instead of `patch` for those release types.
+[`npm version`](https://docs.npmjs.com/cli/v11/commands/npm-version/) updates `package.json` and `package-lock.json` together.
+The flag prevents npm from creating a Git commit or tag.
+Review and commit both files through the normal release review process.
+Create a Git tag matching the package version with a `v` prefix, such as `v1.1.38`.
+From that committed release, run the local build and tests, then upload a Forge build using the same tag:
+
+```sh
+npm run build
+npm test
+forge build --tag v1.1.38
+forge deploy --tag v1.1.38 --non-interactive --e development
+```
+
+Replace `v1.1.38` with the actual release tag and choose the intended deployment environment.
+For this prototype, tagged Forge builds are a manual release step.
+Normal development deployments use `forge deploy` without a tag, as shown above.
+The standalone scripts package has no version field and does not need a matching bump.
+
+The npm package version is separate from [Forge app versions](https://developer.atlassian.com/platform/forge/versions/), which Forge manages during deployment.
+Use Forge deployment and invocation records to identify deployed versions.
 
 ## Running Scripts
 
