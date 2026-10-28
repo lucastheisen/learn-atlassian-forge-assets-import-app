@@ -1,6 +1,9 @@
-import { kvs, PolicySetOptions } from "@forge/kvs";
-import { deleteAllValues, getAllValues } from "./kv-common";
-import { ArgumentError, DataAccessError, InvalidOperationError } from "./errors";
+import {
+  ArgumentError,
+  DataAccessError,
+  InvalidOperationError,
+} from "./errors";
+import { deleteAllValues, getAllValues, getValue, setValue } from "./kv-common";
 import { type ImportManifest, importManifestKey } from "./kv-data";
 
 interface UploadDataManifest {
@@ -62,53 +65,23 @@ const padIndex = (index: number) => String(index).padStart(6, "0");
 
 const uploadKeyPrefix = (uploadId: string) => `import:upload:${uploadId}:`;
 
-const uploadDataManifestKeyPrefix = (uploadId: string) => `${uploadKeyPrefix(uploadId)}data:`;
+const uploadDataManifestKeyPrefix = (uploadId: string) =>
+  `${uploadKeyPrefix(uploadId)}data:`;
 
 const uploadDataManifestKey = (uploadId: string, index: number) =>
   `${uploadDataManifestKeyPrefix(uploadId)}${padIndex(index)}`;
 
-const uploadManifestKey = (uploadId: string) => `import:upload:${uploadId}:manifest`;
-
-async function getValue<T>(key: string, operation: string): Promise<T | undefined> {
-  try {
-    return await kvs.get<T>(key);
-  } catch (err) {
-    throw new DataAccessError(
-      "KVS_GET_FAILED",
-      `Failed to ${operation}`,
-      {
-        cause: err,
-        details: { key },
-      },
-    );
-  }
-}
-
-async function setValue<T>(
-  key: string,
-  value: T,
-  options: PolicySetOptions,
-  operation: string,
-): Promise<void> {
-  try {
-    await kvs.set(key, value, options);
-  } catch (err) {
-    throw new DataAccessError(
-      "KVS_SET_FAILED",
-      `Failed to ${operation}`,
-      {
-        cause: err,
-        details: { key },
-      },
-    );
-  }
-}
+const uploadManifestKey = (uploadId: string) =>
+  `import:upload:${uploadId}:manifest`;
 
 export const writeUploadComplete = async (
   uploadId: string,
 ): Promise<ImportManifest> => {
   const uploadKey = uploadManifestKey(uploadId);
-  const upload = await getValue<UploadManifest>(uploadKey, "read upload manifest");
+  const upload = await getValue<UploadManifest>(
+    uploadKey,
+    "read upload manifest",
+  );
 
   if (!upload) {
     throw new InvalidOperationError(
@@ -122,13 +95,19 @@ export const writeUploadComplete = async (
 
   const importKey = importManifestKey(upload.timestamp, upload.testing);
 
-  const existing = await getValue<ImportManifest>(importKey, "read import manifest");
+  const existing = await getValue<ImportManifest>(
+    importKey,
+    "read import manifest",
+  );
   if (existing) {
     return existing;
   }
 
-  const uploadData = (await getAllValues<UploadDataManifest>(uploadDataManifestKeyPrefix(uploadId)))
-    .sort((a, b) => a.value.index - b.value.index);
+  const uploadData = (
+    await getAllValues<UploadDataManifest>(
+      uploadDataManifestKeyPrefix(uploadId),
+    )
+  ).sort((a, b) => a.value.index - b.value.index);
 
   const manifest: ImportManifest = {
     uploadId,
@@ -154,7 +133,10 @@ export const writeUploadComplete = async (
     "persist completed import manifest",
   );
 
-  const deleteResult = await deleteAllValues([...uploadData.map(({ key }) => key), uploadKey]);
+  const deleteResult = await deleteAllValues([
+    ...uploadData.map(({ key }) => key),
+    uploadKey,
+  ]);
   if (deleteResult.failedKeys.length > 0) {
     throw new DataAccessError(
       "KVS_DELETE_FAILED",

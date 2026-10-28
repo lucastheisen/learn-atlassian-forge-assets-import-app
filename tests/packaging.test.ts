@@ -67,7 +67,7 @@ describe('manual packaging', () => {
       encoding: 'utf8',
       env: { ...process.env, NODE_PATH: '' },
     });
-    expect(handlers).toHaveLength(7);
+    expect(handlers).toHaveLength(9);
     expect(result).toBe('ok');
   });
 

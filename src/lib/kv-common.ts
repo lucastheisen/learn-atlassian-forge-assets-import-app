@@ -2,6 +2,7 @@ import {
   type BatchResult,
   kvs,
   type ListResult,
+  type PolicySetOptions,
   type Result,
   WhereConditions,
 } from "@forge/kvs";
@@ -56,7 +57,9 @@ export async function getAllValues<T>(prefix: string): Promise<Result<T>[]> {
 
 // uses function* here because generator functions cannot be defined using
 // fat arrow syntax
-export async function* iterateAllValues<T>(prefix: string): AsyncGenerator<Result<T>> {
+export async function* iterateAllValues<T>(
+  prefix: string,
+): AsyncGenerator<Result<T>> {
   let cursor: string | undefined;
 
   do {
@@ -70,11 +73,12 @@ export async function* iterateAllValues<T>(prefix: string): AsyncGenerator<Resul
   } while (cursor !== undefined);
 }
 
-async function nextPage<T>(prefix: string, cursor?: string): Promise<ListResult<T>> {
+export async function nextPage<T>(
+  prefix: string,
+  cursor?: string,
+): Promise<ListResult<T>> {
   try {
-    const query = kvs
-      .query()
-      .where("key", WhereConditions.beginsWith(prefix));
+    const query = kvs.query().where("key", WhereConditions.beginsWith(prefix));
 
     if (cursor === undefined) {
       return await query.getMany<T>();
@@ -90,5 +94,35 @@ async function nextPage<T>(prefix: string, cursor?: string): Promise<ListResult<
         details: { prefix, cursor },
       },
     );
+  }
+}
+
+export async function getValue<T>(
+  key: string,
+  operation: string,
+): Promise<T | undefined> {
+  try {
+    return await kvs.get<T>(key);
+  } catch (cause) {
+    throw new DataAccessError("KVS_GET_FAILED", `Failed to ${operation}`, {
+      cause,
+      details: { key },
+    });
+  }
+}
+
+export async function setValue<T>(
+  key: string,
+  value: T,
+  options: PolicySetOptions,
+  operation: string,
+): Promise<void> {
+  try {
+    await kvs.set(key, value, options);
+  } catch (cause) {
+    throw new DataAccessError("KVS_SET_FAILED", `Failed to ${operation}`, {
+      cause,
+      details: { key },
+    });
   }
 }

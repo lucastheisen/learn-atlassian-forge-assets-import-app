@@ -2,12 +2,17 @@ import z from "zod";
 import { assetsClient, unwrap } from "../../lib/forge-clients";
 import { type Command, staticWebTriggerResponseSuccess } from "./common";
 import { BadRequestError } from "./errors";
+import {
+  assertSmokeReferences,
+  SmokeReferenceCheck,
+} from "./import-smoke-reference";
 
 export const ImportSmokeAssert = z.object({
   type: z.literal("import-smoke-assert"),
   workspaceId: z.string().min(1),
   importSourceId: z.string().min(1),
   expectedStatus: z.enum(["INGESTING", "PROCESSING", "DONE", "CANCELLED"]),
+  referenceSync: SmokeReferenceCheck.optional(),
   objects: z
     .object({
       objectTypeName: z.string().min(1),
@@ -67,6 +72,17 @@ export const importSmokeAssertCommand: Command<
       );
     }
   }
+
+  if (action.referenceSync)
+    await assertSmokeReferences(
+      {
+        importSourceId: action.importSourceId,
+        testing: true,
+        workspaceId: action.workspaceId,
+      },
+      status.executionId,
+      action.referenceSync,
+    );
 
   return staticWebTriggerResponseSuccess();
 };

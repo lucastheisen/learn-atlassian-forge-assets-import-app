@@ -13,6 +13,9 @@ modules:
     - function: workerQueueFunction
       key: assets-import-app-uk2-assets-imports-tutorial-worker-queue-consumer
       queue: worker-queue
+    - function: referenceQueueFunction
+      key: user-reference-consumer
+      queue: reference-queue
   function:
     - handler: index.handler
       key: resolver
@@ -26,8 +29,18 @@ modules:
       key: importStatus
     - handler: index.workerHandler
       key: workerQueueFunction
+      timeoutSeconds: 300
+    - handler: index.referenceHandler
+      key: referenceQueueFunction
+      timeoutSeconds: 300
+    - handler: index.recoverImports
+      key: recoverImports
     - handler: index.webtriggerDispatch
       key: webtriggerDispatch
+  scheduledTrigger:
+    - function: recoverImports
+      interval: fiveMinute
+      key: import-recovery
   jiraServiceManagement:assetsImportType:
     - description: User import.
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
@@ -96,8 +109,10 @@ permissions:
     - read:cmdb-object:jira
     - read:cmdb-schema:jira
     - read:cmdb-type:jira
-    - write:cmdb-object:jira
+    - read:email-address:jira
+    - read:jira-user
     - storage:app
+    - write:cmdb-object:jira
 resources:
   - bundler: manual@2026
     key: main

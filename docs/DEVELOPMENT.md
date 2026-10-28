@@ -53,6 +53,26 @@ They check handler exports and JWT verification without installed backend depend
 After deploying, verify the configuration UI and run the upload smoke test below.
 Run the import smoke test only after configuring its dedicated import source.
 
+### Major Version Upgrades
+
+Permission changes can require a new Forge major version and an upgrade of the existing installation.
+The current MCP deployment tool cannot acknowledge `MAJOR_VERSION_RULE` or upgrade installations, so ask the operator to run this command after the build and tests pass:
+
+```sh
+(
+  cd /workspace/github.com/lucastheisen/learn-atlassian-forge-assets-import-app || exit
+  forge deploy --non-interactive --environment development \
+    --approve MAJOR_VERSION_RULE &&
+  forge install --non-interactive --upgrade --confirm-scopes \
+    --environment development --product jira \
+    --site lucastheisen.atlassian.net
+)
+```
+
+The subshell preserves the operator's current directory. Confirm both deployment and installation upgrade succeeded before running live checks that require the new permissions.
+Subsequent minor deployments apply automatically to installations on that major version and continue through MCP.
+See [Forge app versions](https://developer.atlassian.com/platform/forge/versions/) and the [installation command](https://developer.atlassian.com/platform/forge/cli-reference/install/).
+
 ### Verify the Deployment
 
 Record the target environment, deployment time, and Forge version reported by `forge deploy`.
@@ -127,8 +147,8 @@ Run with `npm run smoke:upload`.
 
 ### Import Smoke Test (`scripts/smoke-import.ts`)
 
-Drives a real import execution end-to-end: uploads a test manifest, starts an import against it via the `import-start` webtrigger command, polls `import-smoke-assert` until the execution reaches `DONE`, then polls it again to confirm the expected objects landed in CMDB.
-Cleans up afterward via `import-smoke-cleanup` (deletes the objects it created) and `prune` (deletes the test manifest), regardless of pass/fail.
+Drives a real import execution end-to-end: uploads a test manifest, starts an import against it via the `import-start` webtrigger command, polls `import-smoke-assert` until the execution reaches `DONE`, then confirms the objects and reference-processing summary. With `FORGE_SMOKE_USER_EMAIL` set, it verifies a real account association, repeats the identical import, and checks that the associated asset’s `Updated` timestamp is unchanged.
+After reference processing finishes, `import-smoke-cleanup` deletes the objects it created and `prune` deletes the test manifest. Cleanup waits for the active lifecycle; a lifecycle that cannot finish leaves its test input intact for recovery.
 Unlike uploads, there is no `testing: true` flag for import executions — every run really creates objects in CMDB via the Assets API.
 So this smoke test targets a dedicated test import source, isolated from any import source that touches real data, set up once per environment as described below.
 Run with `npm run smoke:import`.
@@ -153,8 +173,7 @@ The smoke test code expects the exact names below.
    - `Title` (Text)
    - `Active` (Boolean)
    - `Atlassian User` (User)
-     - Not resolvable via this import source yet — see [issue #2](https://github.com/lucastheisen/learn-atlassian-forge-assets-import-app/issues/2).
-       Kept here anyway since we intend to populate it, either once that's fixed upstream or via the bolt-on process in `docs/NOTES.md`.
+     - Set maximum cardinality to **1**. The app populates it after native import completion; native mapping still excludes User attributes (see [issue #2](https://github.com/lucastheisen/learn-atlassian-forge-assets-import-app/issues/2)).
 4. In the schema's settings, open the **Import** tab and add an import configuration, picking this Forge app.
    This is the step that mints a new `importSourceId` isolated from the real one — there is no API to create an import source, only this UI wizard.
 5. Open that import configuration's app screen (it loads this app's own `getConfig`/`setConfig` UI) and paste this into the mapping editor for `Smoke User`:
@@ -181,8 +200,19 @@ The smoke test code expects the exact names below.
 
    The right-hand side of each `attributeMap` entry is the field name from `scripts/lib/smoke-users.ts`'s `buildUsersChunk`; `selector: "users"` picks out the `users` array that function nests its records under.
    `Atlassian User` is included for forward-compatibility but currently has no effect — the schema-and-mapping endpoint doesn't expose User-type attributes, so this app's own mapping logic silently drops it (see `issue #2`, linked above).
-   The import still succeeds with it left unresolved/empty.
+   Post-import reference processing now populates it through the fixed `Email` lookup. Unmatched synthetic smoke users remain empty and appear as unresolved associations in the retained summary.
    `scripts/smoke-import.ts` overrides `title` per run to a unique run id, since that's how its `import-smoke-assert`/`import-smoke-cleanup` calls scope themselves to only the objects a given run created.
 6. The same app screen displays `ImportId` and `WorkspaceId` at the top — export them as environment variables:
    - `FORGE_SMOKE_WORKSPACE_ID`: the displayed `WorkspaceId`
    - `FORGE_SMOKE_IMPORT_SOURCE_ID`: the displayed `ImportId`
+
+
+### Reference-processing verification
+
+The new `read:email-address:jira` and `read:jira-user` scopes require a development installation upgrade after deploying this change. Grant the app identity permission to browse Jira users and update the dedicated Assets type. The app discovers the type through its native `users` selector; do not add a second mapping with that same selector.
+
+Set `FORGE_SMOKE_USER_EMAIL` to an existing Jira user's email before `npm run smoke:import`. The first synthetic record will use that email. The test checks the persisted User reference's account email through Jira, then runs an identical full import and verifies that this record's `Updated` timestamp did not change. The other 14 synthetic addresses intentionally produce unresolved outcomes, so the expected summary status is `with_errors`, not clean success. With no real email supplied, the test validates only the unresolved path.
+
+The script entrypoint reads environment settings; reusable import-smoke logic lives in `scripts/lib/import-smoke.ts`. Source data and identity values are not printed. Cleanup also removes the small test timestamp baseline. There is no new reporting endpoint; these checks extend the existing authenticated smoke-test commands.
+
+See [User references after import](USER_REFERENCE_SYNC.md) for KVS access paths, timing limits, retention, and recovery. Mocked scale tests do not establish real cloud completion times.
