@@ -15,6 +15,7 @@
     "generate:secret-key": "npm --prefix scripts run generate:secret-key",
     "lint": "biome lint && forge lint",
     "smoke:import": "npm --prefix scripts run smoke:import",
+    "smoke:import:report": "npm --prefix scripts run smoke:import:report",
     "smoke:upload": "npm --prefix scripts run smoke:upload",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && npm --prefix scripts run typecheck"

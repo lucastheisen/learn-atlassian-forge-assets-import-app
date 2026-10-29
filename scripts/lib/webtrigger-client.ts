@@ -1,38 +1,68 @@
-import { generateWebTriggerToken } from './webtrigger-token.js'
+import {
+  type WebTriggerResponse,
+  WebTriggerResponseSchema,
+} from "./import-smoke-schemas.js";
+import { generateWebTriggerToken } from "./webtrigger-token.js";
 
-export interface WebTriggerResponse {
-  status: number
-  title: string
-}
+export type { WebTriggerResponse } from "./import-smoke-schemas.js";
 
 export interface WebTriggerConnection {
-  url: string
-  secret: string
+  secret: string;
+  url: string;
+}
+
+export class WebTriggerTransportError extends Error {
+  constructor() {
+    super("Webtrigger request failed or timed out");
+  }
 }
 
 export async function callWebTrigger(
   action: Record<string, unknown>,
-  { url, secret }: WebTriggerConnection,
+  { secret, url }: WebTriggerConnection,
+  signal: AbortSignal = AbortSignal.timeout(30000),
 ): Promise<WebTriggerResponse> {
-  const token = await generateWebTriggerToken(secret)
+  const token = await generateWebTriggerToken(secret);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(action),
-  })
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      body: JSON.stringify(action),
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal,
+    });
+  } catch {
+    throw new WebTriggerTransportError();
+  }
 
-  const body = (await response.json()) as WebTriggerResponse
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    throw new Error(
+      `Webtrigger returned invalid JSON (HTTP ${response.status})`,
+    );
+  }
+
+  const result = WebTriggerResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(
+      `Webtrigger returned invalid response metadata (HTTP ${response.status})`,
+    );
+  }
+
+  const body = result.data;
 
   if (response.status !== body.status) {
     throw new Error(
-      `webtrigger response status mismatch: http ${response.status} vs body ${JSON.stringify(body)}`,
-    )
+      `webtrigger response status mismatch (HTTP ${response.status})`,
+    );
   }
 
-  return body
+  return body;
 }

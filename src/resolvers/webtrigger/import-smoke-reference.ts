@@ -21,26 +21,12 @@ import { BadRequestError } from "./errors";
 export const SmokeReferenceCheck = z.object({
   baseline: z.enum(["remember", "verify"]).optional(),
   email: z.string().email().optional(),
-  expectedUnresolved: z.number().int().nonnegative(),
+  expectedUnmatched: z.number().int().nonnegative(),
   uploadId: z.string().min(1),
 });
 
 export const smokeBaselineKey = (scope: ReferenceScope, uploadId: string) =>
   `${referenceRoot(true)}smoke:${encodeURIComponent(scope.workspaceId)}:${encodeURIComponent(scope.importSourceId)}:${encodeURIComponent(uploadId)}`;
-
-export async function latestSmokeRun(
-  scope: ReferenceScope,
-  uploadId: string,
-): Promise<ReferenceRun | undefined> {
-  let latest: ReferenceRun | undefined;
-  for await (const { value } of iterateAllValues<ReferenceRun>(
-    manifestPrefix(scope),
-  )) {
-    if (value.uploadId === uploadId && (!latest || value.id > latest.id))
-      latest = value;
-  }
-  return latest;
-}
 
 export async function assertSmokeReferences(
   scope: ReferenceScope,
@@ -57,8 +43,27 @@ export async function assertSmokeReferences(
     !summary ||
     summary.status === "failed" ||
     summary.unfinished ||
-    summary.counts.unresolved !== check.expectedUnresolved
+    summary.selectionComplete !== true ||
+    summary.counts.unresolved !== check.expectedUnmatched ||
+    (summary.reasons.unmatched ?? 0) !== check.expectedUnmatched ||
+    Object.entries(summary.reasons).some(
+      ([reason, count]) => reason !== "unmatched" && count !== 0,
+    ) ||
+    summary.counts.updated !==
+      (check.email && check.baseline !== "verify" ? 1 : 0)
   ) {
+    console.warn(
+      "SMOKE_ASSERTION " +
+        JSON.stringify({
+          counts: summary?.counts,
+          expectedUnmatched: check.expectedUnmatched,
+          reasons: summary?.reasons,
+          runId: run.id,
+          selectionComplete: summary?.selectionComplete,
+          unfinished: summary?.unfinished,
+          uploadId: check.uploadId,
+        }),
+    );
     throw new BadRequestError(
       "Smoke reference processing did not produce the expected terminal result",
     );
@@ -71,11 +76,11 @@ export async function assertSmokeReferences(
     route`/jsm/assets/workspace/${scope.workspaceId}/v1/object/aql?includeAttributes=${"true"}&maxResults=${2}`,
     budget,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         qlQuery: `objectTypeId = ${run.schema.objectTypeId} AND Email = ${JSON.stringify(check.email)} AND Title = ${JSON.stringify(check.uploadId)}`,
       }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     },
   );
   const asset = result.values.length === 1 ? result.values[0] : undefined;
@@ -124,4 +129,18 @@ export async function assertSmokeReferences(
       );
     }
   }
+}
+
+export async function latestSmokeRun(
+  scope: ReferenceScope,
+  uploadId: string,
+): Promise<ReferenceRun | undefined> {
+  let latest: ReferenceRun | undefined;
+  for await (const { value } of iterateAllValues<ReferenceRun>(
+    manifestPrefix(scope),
+  )) {
+    if (value.uploadId === uploadId && (!latest || value.id > latest.id))
+      latest = value;
+  }
+  return latest;
 }

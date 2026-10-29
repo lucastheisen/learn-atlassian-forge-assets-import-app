@@ -3,6 +3,10 @@ import { kvs } from "@forge/kvs";
 import { DataAccessError } from "./errors";
 import { deleteAllValues, getValue, nextPage, setValue } from "./kv-common";
 import type { ImportManifest } from "./kv-data";
+import {
+  measureReferenceOperation,
+  observeReferenceRun,
+} from "./reference-metrics";
 import type {
   InventoryPage,
   PendingReference,
@@ -14,123 +18,57 @@ import type {
 } from "./reference-types";
 
 export const activeRunKey = "user-reference:active";
-export const referenceRoot = (testing: boolean) =>
-  `user-reference:${testing ? "test" : "live"}:`;
-const scopeKey = (scope: ReferenceScope) =>
-  `${encodeURIComponent(scope.workspaceId)}:${encodeURIComponent(scope.importSourceId)}:`;
+
+export const cancellationKey = (scope: ReferenceScope) =>
+  `${referenceRoot(scope.testing)}cancel:${scopeKey(scope)}`;
+
+export const deletionKey = (scope: ReferenceScope) =>
+  `${deletionPrefix(scope.testing)}${scopeKey(scope)}`;
+
+export const deletionPrefix = (testing: boolean) =>
+  `${referenceRoot(testing)}deleted:`;
+
+export const inventoryKey = (run: ReferenceRun, index: number) =>
+  `${runPrefix(run)}inventory:${index}`;
+
+export const inventoryMetaKey = (run: ReferenceRun, index: number) =>
+  `${referenceRoot(run.testing)}page-meta:${scopeKey(run)}${run.id}:${index}`;
+
 export const manifestPrefix = (scope: ReferenceScope) =>
   `${referenceRoot(scope.testing)}manifest:${scopeKey(scope)}`;
-export const runKey = (run: ReferenceRun) => `${manifestPrefix(run)}${run.id}`;
-export const runPrefix = (run: ReferenceRun) =>
-  `${referenceRoot(run.testing)}run:${scopeKey(run)}${run.id}:`;
-export const pendingPrefix = (scope: ReferenceScope) =>
-  `${referenceRoot(scope.testing)}pending:${scopeKey(scope)}`;
+
+export const pendingKey = (run: ReferenceScope, assetId: string) =>
+  `${pendingPrefix(run)}${createHash("sha256").update(assetId).digest("hex").slice(0, 2)}:${encodeURIComponent(assetId)}`;
+
 export const pendingPartitionPrefix = (
   scope: ReferenceScope,
   partition: number,
 ) => `${pendingPrefix(scope)}${partition.toString(16).padStart(2, "0")}:`;
-export const pendingKey = (run: ReferenceScope, assetId: string) =>
-  `${pendingPrefix(run)}${createHash("sha256").update(assetId).digest("hex").slice(0, 2)}:${encodeURIComponent(assetId)}`;
-export const workKey = (run: ReferenceRun, assetId: string) =>
-  `${runPrefix(run)}asset:${encodeURIComponent(assetId)}`;
-export const inventoryKey = (run: ReferenceRun, index: number) =>
-  `${runPrefix(run)}inventory:${index}`;
-export const inventoryMetaKey = (run: ReferenceRun, index: number) =>
-  `${referenceRoot(run.testing)}page-meta:${scopeKey(run)}${run.id}:${index}`;
-export const summaryKey = (run: ReferenceRun) =>
-  `${referenceRoot(run.testing)}summary:${scopeKey(run)}${run.executionId ?? run.id}`;
-export const uploadKey = (run: ReferenceRun) => `${runPrefix(run)}upload`;
+
+export const pendingPrefix = (scope: ReferenceScope) =>
+  `${referenceRoot(scope.testing)}pending:${scopeKey(scope)}`;
+
 export const recoveryKey = (scope: ReferenceScope) =>
   `${referenceRoot(scope.testing)}recovery:${scopeKey(scope)}`;
-export const cancellationKey = (scope: ReferenceScope) =>
-  `${referenceRoot(scope.testing)}cancel:${scopeKey(scope)}`;
-export const deletionPrefix = (testing: boolean) =>
-  `${referenceRoot(testing)}deleted:`;
-export const deletionKey = (scope: ReferenceScope) =>
-  `${deletionPrefix(scope.testing)}${scopeKey(scope)}`;
 
-export const saveReferenceValue = <T>(key: string, value: T): Promise<void> =>
-  setValue(
-    key,
-    value,
-    { keyPolicy: "OVERRIDE" },
-    "persist reference processing state",
-  );
-export const readReferenceValue = <T>(key: string): Promise<T | undefined> =>
-  getValue<T>(key, "read reference processing state");
-export const saveRun = (run: ReferenceRun): Promise<void> => {
-  if (run.timedPhase !== run.phase) {
-    if (run.timedPhase && run.phaseStartedAt !== undefined) {
-      run.phaseDurationsMs ??= {};
-      run.phaseDurationsMs[run.timedPhase] =
-        (run.phaseDurationsMs[run.timedPhase] ?? 0) +
-        Date.now() -
-        run.phaseStartedAt;
-    }
-    run.timedPhase = run.phase;
-    run.phaseStartedAt = Date.now();
-  }
-  return saveReferenceValue(runKey(run), run);
-};
+export const referenceRoot = (testing: boolean) =>
+  `user-reference:${testing ? "test" : "live"}:`;
 
-export async function deleteReferenceValues(keys: string[]): Promise<void> {
-  const result = await deleteAllValues(keys);
-  if (
-    result.failedKeys.some(({ error }) => error.code !== "KEY_NOT_FOUND") ||
-    new Set(
-      [...result.successfulKeys, ...result.failedKeys].map(({ key }) => key),
-    ).size !== keys.length
-  ) {
-    throw new DataAccessError(
-      "KVS_DELETE_FAILED",
-      "Reference cleanup is incomplete",
-    );
-  }
-}
+export const runKey = (run: ReferenceRun) => `${manifestPrefix(run)}${run.id}`;
 
-export async function readWorkItems(
-  run: ReferenceRun,
-  ids: string[],
-): Promise<Map<string, WorkItem>> {
-  const values = new Map<string, WorkItem>();
-  for (let offset = 0; offset < ids.length; offset += 25) {
-    const keys = ids.slice(offset, offset + 25).map((id) => workKey(run, id));
-    const result = await kvs.batchGet<WorkItem>(keys.map((key) => ({ key })));
-    if (
-      result.failedKeys.some(({ error }) => error.code !== "KEY_NOT_FOUND") ||
-      new Set(
-        [...result.successfulKeys, ...result.failedKeys].map(({ key }) => key),
-      ).size !== keys.length
-    ) {
-      throw new DataAccessError(
-        "KVS_GET_FAILED",
-        "Reference work batch read is incomplete",
-      );
-    }
-    for (const { value } of result.successfulKeys)
-      values.set(value.assetId, value);
-  }
-  return values;
-}
+export const runPrefix = (run: ReferenceRun) =>
+  `${referenceRoot(run.testing)}run:${scopeKey(run)}${run.id}:`;
 
-async function writeWorkItems(
-  run: ReferenceRun,
-  items: WorkItem[],
-): Promise<void> {
-  if (!items.length) return;
-  const result = await kvs.batchSet(
-    items.map((value) => ({ key: workKey(run, value.assetId), value })),
-  );
-  if (
-    result.failedKeys.length ||
-    result.successfulKeys.length !== items.length
-  ) {
-    throw new DataAccessError(
-      "KVS_SET_FAILED",
-      "Reference work batch write is incomplete",
-    );
-  }
-}
+const scopeKey = (scope: ReferenceScope) =>
+  `${encodeURIComponent(scope.workspaceId)}:${encodeURIComponent(scope.importSourceId)}:`;
+
+export const summaryKey = (run: ReferenceRun) =>
+  `${referenceRoot(run.testing)}summary:${scopeKey(run)}${run.executionId ?? run.id}`;
+
+export const uploadKey = (run: ReferenceRun) => `${runPrefix(run)}upload`;
+
+export const workKey = (run: ReferenceRun, assetId: string) =>
+  `${runPrefix(run)}asset:${encodeURIComponent(assetId)}`;
 
 export async function commitInventoryPage(
   run: ReferenceRun,
@@ -184,12 +122,19 @@ export async function commitInventoryPage(
   await saveRun(run);
 }
 
-export async function preserveRecoveryWindow(run: ReferenceRun): Promise<void> {
-  const timestamp = run.selectionStartedAt ?? run.startedAt;
-  if (!timestamp) return;
-  const previous = await readReferenceValue<string>(recoveryKey(run));
-  if (!previous || timestamp < previous)
-    await saveReferenceValue(recoveryKey(run), timestamp);
+export async function deleteReferenceValues(keys: string[]): Promise<void> {
+  const result = await deleteAllValues(keys);
+  if (
+    result.failedKeys.some(({ error }) => error.code !== "KEY_NOT_FOUND") ||
+    new Set(
+      [...result.successfulKeys, ...result.failedKeys].map(({ key }) => key),
+    ).size !== keys.length
+  ) {
+    throw new DataAccessError(
+      "KVS_DELETE_FAILED",
+      "Reference cleanup is incomplete",
+    );
+  }
 }
 
 export async function persistSummary(run: ReferenceRun): Promise<RunSummary> {
@@ -215,9 +160,12 @@ export async function persistSummary(run: ReferenceRun): Promise<RunSummary> {
           }
         : {}),
     },
+    queueWaitMs:
+      Date.parse(run.startedAt ?? run.requestedAt) -
+      Date.parse(run.requestedAt),
     reasons: run.aggregation.reasons,
-    runId: run.id,
     retentionDurationMs: run.retentionDurationMs ?? 0,
+    runId: run.id,
     selected: run.selected,
     selectionComplete: run.discovery === "sealed",
     startedAt: run.startedAt ?? run.requestedAt,
@@ -227,6 +175,7 @@ export async function persistSummary(run: ReferenceRun): Promise<RunSummary> {
         ? "with_errors"
         : "success",
     testing: run.testing,
+    tuning: run.tuning,
     unfinished: run.selected - run.aggregation.total,
     workspaceId: run.workspaceId,
   };
@@ -242,6 +191,14 @@ export async function persistSummary(run: ReferenceRun): Promise<RunSummary> {
     throw new Error("Reference summary exceeds the KVS value limit");
   await saveReferenceValue(summaryKey(run), summary);
   return summary;
+}
+
+export async function preserveRecoveryWindow(run: ReferenceRun): Promise<void> {
+  const timestamp = run.selectionStartedAt ?? run.startedAt;
+  if (!timestamp) return;
+  const previous = await readReferenceValue<string>(recoveryKey(run));
+  if (!previous || timestamp < previous)
+    await saveReferenceValue(recoveryKey(run), timestamp);
 }
 
 export async function pruneReferenceRun(
@@ -292,20 +249,6 @@ export async function pruneReferenceRun(
   await deleteReferenceValues([runKey(run)]);
 }
 
-export async function retainThreeRuns(
-  run: ReferenceRun,
-  budget: ProcessingBudget,
-): Promise<void> {
-  const startedAt = Date.now();
-  try {
-    await pruneRetainedRuns(run, budget);
-  } finally {
-    run.retentionDurationMs =
-      (run.retentionDurationMs ?? 0) + Date.now() - startedAt;
-    await saveRun(run);
-  }
-}
-
 async function pruneRetainedRuns(
   run: ReferenceRun,
   budget: ProcessingBudget,
@@ -320,8 +263,8 @@ async function pruneRetainedRuns(
   if (!retention.scanned) {
     const eligible: {
       key: string;
-      startedAt: string;
       phase: ReferenceRun["phase"];
+      startedAt: string;
     }[] = [];
     let cursor: string | undefined;
     do {
@@ -366,6 +309,55 @@ async function pruneRetainedRuns(
   await saveRun(run);
 }
 
+export const readReferenceValue = <T>(key: string): Promise<T | undefined> =>
+  getValue<T>(key, "read reference processing state");
+
+export const readRunUpload = (
+  run: ReferenceRun,
+): Promise<ImportManifest | undefined> =>
+  readReferenceValue<ImportManifest>(uploadKey(run));
+
+export async function readWorkItems(
+  run: ReferenceRun,
+  ids: string[],
+): Promise<Map<string, WorkItem>> {
+  const values = new Map<string, WorkItem>();
+  for (let offset = 0; offset < ids.length; offset += 25) {
+    const keys = ids.slice(offset, offset + 25).map((id) => workKey(run, id));
+    const result = await measureReferenceOperation("kvs.batchGet", () =>
+      kvs.batchGet<WorkItem>(keys.map((key) => ({ key }))),
+    );
+    if (
+      result.failedKeys.some(({ error }) => error.code !== "KEY_NOT_FOUND") ||
+      new Set(
+        [...result.successfulKeys, ...result.failedKeys].map(({ key }) => key),
+      ).size !== keys.length
+    ) {
+      throw new DataAccessError(
+        "KVS_GET_FAILED",
+        "Reference work batch read is incomplete",
+      );
+    }
+    for (const { value } of result.successfulKeys)
+      values.set(value.assetId, value);
+  }
+  return values;
+}
+
+export async function retainThreeRuns(
+  run: ReferenceRun,
+  budget: ProcessingBudget,
+): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    await pruneRetainedRuns(run, budget);
+  } finally {
+    run.retentionDurationMs =
+      (run.retentionDurationMs ?? 0) + Date.now() - startedAt;
+    await saveRun(run);
+  }
+}
+
 export const savePending = (run: ReferenceRun, item: WorkItem): Promise<void> =>
   saveReferenceValue<PendingReference>(pendingKey(run, item.assetId), {
     assetId: item.assetId,
@@ -374,7 +366,47 @@ export const savePending = (run: ReferenceRun, item: WorkItem): Promise<void> =>
     runId: run.id,
   });
 
-export const readRunUpload = (
+export const saveReferenceValue = <T>(key: string, value: T): Promise<void> =>
+  setValue(
+    key,
+    value,
+    { keyPolicy: "OVERRIDE" },
+    "persist reference processing state",
+  );
+
+export const saveRun = (run: ReferenceRun): Promise<void> => {
+  observeReferenceRun(run);
+  if (run.timedPhase !== run.phase) {
+    if (run.timedPhase && run.phaseStartedAt !== undefined) {
+      run.phaseDurationsMs ??= {};
+      run.phaseDurationsMs[run.timedPhase] =
+        (run.phaseDurationsMs[run.timedPhase] ?? 0) +
+        Date.now() -
+        run.phaseStartedAt;
+    }
+    run.timedPhase = run.phase;
+    run.phaseStartedAt = Date.now();
+  }
+  return saveReferenceValue(runKey(run), run);
+};
+
+async function writeWorkItems(
   run: ReferenceRun,
-): Promise<ImportManifest | undefined> =>
-  readReferenceValue<ImportManifest>(uploadKey(run));
+  items: WorkItem[],
+): Promise<void> {
+  if (!items.length) return;
+  const result = await measureReferenceOperation("kvs.batchSet", () =>
+    kvs.batchSet(
+      items.map((value) => ({ key: workKey(run, value.assetId), value })),
+    ),
+  );
+  if (
+    result.failedKeys.length ||
+    result.successfulKeys.length !== items.length
+  ) {
+    throw new DataAccessError(
+      "KVS_SET_FAILED",
+      "Reference work batch write is incomplete",
+    );
+  }
+}

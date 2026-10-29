@@ -36,17 +36,20 @@ vi.mock("@forge/kvs", async () => {
     "../../tests/helpers/reference-storage.js"
   );
   return {
-    kvs: memory.api,
     WhereConditions: { beginsWith: (prefix: string) => prefix },
+    kvs: memory.api,
   };
 });
+
 vi.mock("./reference-assets", async (original) => ({
   ...(await original<typeof import("./reference-assets")>()),
   discoverAssets: vi.fn(),
   fetchAsset: vi.fn(),
   updateReference: vi.fn(),
 }));
-const budget = () => new ProcessingBudget(() => 0);
+
+const budget = () => new ProcessingBudget(() => 0, 240_000);
+
 beforeEach(() => {
   storage.reset();
   vi.mocked(discoverAssets).mockReset();
@@ -54,7 +57,9 @@ beforeEach(() => {
   vi.mocked(updateReference).mockReset().mockResolvedValue(undefined);
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
+
 afterEach(() => vi.restoreAllMocks());
+
 describe("reference processing at scale", () => {
   it.each([
     7_000, 50_000,
@@ -74,8 +79,8 @@ describe("reference processing at scale", () => {
     );
     for (let i = 0; i < 4; i++) {
       let run = makeRun({
-        id: `scale-${i}`,
         executionId: `execution-${i}`,
+        id: `scale-${i}`,
         requestedAt: `2026-10-28T12:0${i}:00Z`,
         startedAt: `2026-10-28T12:0${i}:00Z`,
       });
@@ -87,7 +92,7 @@ describe("reference processing at scale", () => {
       while (run.phase === "processing") {
         await processWork(
           run,
-          async () => ({ status: "unresolved", reason: "unmatched" }),
+          async () => ({ reason: "unmatched", status: "unresolved" }),
           budget(),
           itemCap,
         );
@@ -138,23 +143,23 @@ describe("reference processing at scale", () => {
     ).toBe(false);
     expect(updateReference).not.toHaveBeenCalled();
     const report = {
+      bytesRead: storage.metrics.bytesRead,
+      bytesWritten: storage.metrics.bytesWritten,
       candidateCount: count,
-      retainedAssetKeys: 4 * count,
-      inventoryKeys: [...storage.values.keys()].filter((key) =>
-        key.includes(":inventory:"),
-      ).length,
       descriptorKeys: [...storage.values.keys()].filter((key) =>
         key.includes(":page-meta:"),
       ).length,
-      totalKeys: storage.values.size,
-      bytesRead: storage.metrics.bytesRead,
-      bytesWritten: storage.metrics.bytesWritten,
+      inventoryKeys: [...storage.values.keys()].filter((key) =>
+        key.includes(":inventory:"),
+      ).length,
+      retainedAssetKeys: 4 * count,
       storageRequests: storage.metrics.requests,
+      totalKeys: storage.values.size,
     };
     if (process.env.REFERENCE_SCALE_REPORT)
       appendFileSync(
         process.env.REFERENCE_SCALE_REPORT,
-        JSON.stringify(report) + "\n",
+        `${JSON.stringify(report)}\n`,
       );
   }, 120_000);
   it.each(
@@ -188,7 +193,7 @@ describe("reference processing at scale", () => {
       run,
       async (_fields, runtime) => {
         runtime.check();
-        return { status: "unresolved", reason: "unmatched" };
+        return { reason: "unmatched", status: "unresolved" };
       },
       new ProcessingBudget(() => now, 30_000),
       cap,

@@ -8,19 +8,26 @@ import {
 } from "./reference-types";
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+
 vi.mock("@forge/api", async (original) => ({
   ...(await original<typeof import("@forge/api")>()),
   default: { asApp: () => ({ requestJira: request }) },
 }));
+
 beforeEach(() => {
   request.mockReset();
 });
+
 afterEach(() => vi.useRealTimers());
+
 describe("referenceRequest", () => {
   it("uses supported cancellation and safely returns JSON", async () => {
     request.mockResolvedValue(new Response(JSON.stringify({ value: 1 })));
     expect(
-      await referenceRequest(route`/test`, new ProcessingBudget()),
+      await referenceRequest(
+        route`/test`,
+        new ProcessingBudget(Date.now, 240_000),
+      ),
     ).toEqual({ value: 1 });
     expect(request.mock.calls[0]?.[1].signal).toBeInstanceOf(AbortSignal);
   });
@@ -35,7 +42,7 @@ describe("referenceRequest", () => {
       new Response("", { headers: { "Retry-After": "300" }, status: 429 }),
     );
     await expect(
-      referenceRequest(route`/test`, new ProcessingBudget()),
+      referenceRequest(route`/test`, new ProcessingBudget(Date.now, 240_000)),
     ).rejects.toMatchObject({ delaySeconds: 300 });
     expect(request).toHaveBeenCalledOnce();
   });
@@ -44,20 +51,20 @@ describe("referenceRequest", () => {
       new Response('{"email":"private@example.test"}', { status: 403 }),
     );
     await expect(
-      referenceRequest(route`/test`, new ProcessingBudget()),
+      referenceRequest(route`/test`, new ProcessingBudget(Date.now, 240_000)),
     ).rejects.toEqual(new ProductRequestError(403));
   });
   it("bounds network retries but never automatically retries uncertain execution creation", async () => {
     request.mockRejectedValue(new Error("network failed"));
     await expect(
-      referenceRequest(route`/test`, new ProcessingBudget()),
+      referenceRequest(route`/test`, new ProcessingBudget(Date.now, 240_000)),
     ).rejects.toMatchObject({ status: 0 });
     expect(request).toHaveBeenCalledTimes(3);
     request.mockClear();
     await expect(
       referenceRequest(
         route`/importsource/source/executions`,
-        new ProcessingBudget(),
+        new ProcessingBudget(Date.now, 240_000),
         { method: "POST" },
       ),
     ).rejects.toMatchObject({ status: 0 });
@@ -87,7 +94,7 @@ describe("stalled product requests", () => {
         }),
     );
     const result = expect(
-      referenceRequest(route`/test`, new ProcessingBudget()),
+      referenceRequest(route`/test`, new ProcessingBudget(Date.now, 240_000)),
     ).rejects.toMatchObject({ status: 0 });
     await vi.advanceTimersByTimeAsync(60_000);
     await result;

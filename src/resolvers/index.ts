@@ -1,4 +1,5 @@
 import Resolver from "@forge/resolver";
+import { type Config, readConfig } from "../lib/config";
 import { cancelImports, requestImport } from "../lib/import-lifecycle";
 import { getLatestManifest, type ImportManifest } from "../lib/kv-data";
 import {
@@ -10,11 +11,6 @@ import {
 
 const resolver = new Resolver();
 
-export interface Config {
-  // json string
-  mapping: string;
-}
-
 // Manually defined: this shape is documented at
 // https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-service-management-assets-import-type/
 // but no corresponding type ships in the @forge dependencies.
@@ -23,7 +19,7 @@ export interface ImportContext {
   workspaceId: string;
 }
 
-resolver.define("getConfig", async (req) => {
+resolver.define("getConfig", async (req): Promise<Config> => {
   console.log(
     `getting configuration for ${req.context.extension.workspaceId} import ${req.context.extension.importId}`,
   );
@@ -40,7 +36,8 @@ resolver.define("getConfig", async (req) => {
   );
 
   return {
-    mapping: mapping,
+    ...readConfig(),
+    mapping,
   };
 });
 
@@ -74,9 +71,9 @@ export const onDeleteImport = async (context: ImportContext) => {
 };
 
 export interface BeginImportParams {
-  workspaceId: string;
   importSourceId: string;
   manifest: ImportManifest;
+  workspaceId: string;
 }
 
 export const beginImport = async ({
@@ -97,9 +94,9 @@ export const startImport = async (context: ImportContext) => {
   }
 
   await beginImport({
-    workspaceId: context.workspaceId,
     importSourceId: context.importId,
     manifest,
+    workspaceId: context.workspaceId,
   });
 
   return {

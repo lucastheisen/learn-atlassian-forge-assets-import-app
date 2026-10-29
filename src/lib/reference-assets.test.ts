@@ -10,10 +10,13 @@ import {
 import { ProcessingBudget, SchemaError } from "./reference-types";
 
 vi.mock("./reference-api", () => ({ referenceRequest: vi.fn() }));
+
 const request = vi.mocked(referenceRequest);
+
 beforeEach(() => {
   request.mockReset();
 });
+
 describe("candidateAql", () => {
   it("scopes both branches to the object type and floors the inclusive boundary in UTC", () => {
     expect(candidateAql("123", "2026-10-28T08:12:59.999-04:00")).toBe(
@@ -24,54 +27,59 @@ describe("candidateAql", () => {
     );
   });
 });
+
 describe("nativeSucceeded", () => {
   it("requires a documented successful progress result instead of DONE alone", () => {
     expect(nativeSucceeded({ status: "DONE" })).toBe(false);
     expect(nativeSucceeded({ status: "CANCELLED" })).toBe(false);
     expect(
       nativeSucceeded({
-        status: "DONE",
         progressResult: { result: "ERROR", status: "FINISHED" },
+        status: "DONE",
       }),
     ).toBe(false);
     expect(
       nativeSucceeded({
-        status: "DONE",
         progressResult: {
+          errorMessages: null,
           result: "OK",
           status: "FINISHED",
-          errorMessages: null,
         },
+        status: "DONE",
       }),
     ).toBe(true);
     expect(
       nativeSucceeded({
-        status: "DONE",
         progressResult: {
+          objectTypeResultMap: { "10": { errorMessages: ["invalid object"] } },
           result: "OK",
           status: "FINISHED",
-          objectTypeResultMap: { "10": { errorMessages: ["invalid object"] } },
         },
+        status: "DONE",
       }),
     ).toBe(false);
   });
 });
+
 describe("resolveReferenceSchema", () => {
   const attributes = [
-    { id: "2", name: "Active", type: 0, defaultType: { id: 2 } },
+    { defaultType: { id: 2 }, id: "2", name: "Active", type: 0 },
     { id: "3", name: "Email", type: 0 },
-    { id: "4", name: "Atlassian User", maximumCardinality: 1, type: 2 },
+    { id: "4", maximumCardinality: 1, name: "Atlassian User", type: 2 },
   ];
   it("resolves environment-specific IDs from the mapped users selector and type metadata", async () => {
     request
       .mockResolvedValueOnce({
         importSourceOTEntries: [
-          { selector: "users", objectType: { id: "10" } },
+          { objectType: { id: "10" }, selector: "users" },
         ],
       })
       .mockResolvedValueOnce(attributes);
     expect(
-      await resolveReferenceSchema(fixtureScope, new ProcessingBudget()),
+      await resolveReferenceSchema(
+        fixtureScope,
+        new ProcessingBudget(Date.now, 240_000),
+      ),
     ).toMatchObject({
       activeAttributeId: "2",
       emailAttributeId: "3",
@@ -83,7 +91,7 @@ describe("resolveReferenceSchema", () => {
     request
       .mockResolvedValueOnce({
         importSourceOTEntries: [
-          { selector: "users", objectType: { id: "10" } },
+          { objectType: { id: "10" }, selector: "users" },
         ],
       })
       .mockResolvedValueOnce(
@@ -92,21 +100,28 @@ describe("resolveReferenceSchema", () => {
         ),
       );
     await expect(
-      resolveReferenceSchema(fixtureScope, new ProcessingBudget()),
+      resolveReferenceSchema(
+        fixtureScope,
+        new ProcessingBudget(Date.now, 240_000),
+      ),
     ).rejects.toThrow(SchemaError);
   });
   it("does not select an arbitrary type when multiple mappings share the users selector", async () => {
     request.mockResolvedValueOnce({
       importSourceOTEntries: [
-        { selector: "users", objectType: { id: "10" } },
-        { selector: "users", objectType: { id: "11" } },
+        { objectType: { id: "10" }, selector: "users" },
+        { objectType: { id: "11" }, selector: "users" },
       ],
     });
     await expect(
-      resolveReferenceSchema(fixtureScope, new ProcessingBudget()),
+      resolveReferenceSchema(
+        fixtureScope,
+        new ProcessingBudget(Date.now, 240_000),
+      ),
     ).rejects.toThrow(SchemaError);
   });
 });
+
 describe("updateReference", () => {
   it("writes exactly one account ID and only the target attribute", async () => {
     request.mockResolvedValueOnce(undefined);
@@ -114,17 +129,17 @@ describe("updateReference", () => {
       makeRun(),
       "asset-1",
       "account-1",
-      new ProcessingBudget(),
+      new ProcessingBudget(Date.now, 240_000),
     );
     expect(request.mock.calls[0]?.[0].value).toContain("/object/asset-1");
     expect(JSON.parse(String(request.mock.calls[0]?.[2]?.body))).toEqual({
-      objectTypeId: "10",
       attributes: [
         {
-          objectTypeAttributeId: "4",
           objectAttributeValues: [{ value: "account-1" }],
+          objectTypeAttributeId: "4",
         },
       ],
+      objectTypeId: "10",
     });
   });
 });

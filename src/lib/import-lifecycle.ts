@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { route } from "@forge/api";
 import type { AsyncEvent } from "@forge/events";
 import { kvs } from "@forge/kvs";
+import { defaultConfig, readConfig } from "./config";
 import { AppError } from "./errors";
 import { nextPage, setValue } from "./kv-common";
 import { getImportData, type ImportManifest } from "./kv-data";
@@ -36,6 +37,13 @@ import {
   resolveReferenceSchema,
 } from "./reference-assets";
 import {
+  countReferenceMetric,
+  logReferenceSummary,
+  measureReferenceOperation,
+  observeReferenceRun,
+  withReferenceMetrics,
+} from "./reference-metrics";
+import {
   aggregateWork,
   discoverWork,
   processWork,
@@ -60,15 +68,16 @@ import {
   type UserLookup,
 } from "./reference-types";
 import { lookupUserByEmail } from "./user-lookup";
+import { createWorkerBudget } from "./worker-budget";
 
 const NATIVE_TIMEOUT_MS = 30 * 60_000;
-const RUN_TIMEOUT_MS = 2 * 60 * 60_000;
-interface SourceDeletion extends ReferenceScope {
-  finished: boolean;
-}
 
 export interface BeginImportParams extends ReferenceScope {
   manifest: ImportManifest;
+}
+
+interface SourceDeletion extends ReferenceScope {
+  finished: boolean;
 }
 
 export async function requestImport({
@@ -93,12 +102,17 @@ export async function requestImport({
     failures: 0,
     id: `${requestedAt}:${randomUUID()}`,
     index: 0,
+    inputChunks: manifest.totals.keys,
+    inputRecords: manifest.totals.records,
     inventoryPages: 0,
     phase: "queued",
+    phaseStartedAt: Date.parse(requestedAt),
     processingOffset: 0,
     processingPage: 0,
     requestedAt,
     selected: 0,
+    timedPhase: "queued",
+    tuning: readConfig().tuning,
     uploadId: manifest.uploadId,
   };
   await setValue(
@@ -133,13 +147,28 @@ export async function cancelImports(
 
 async function claimRun(key: string): Promise<boolean> {
   try {
-    await kvs.set(activeRunKey, key, { keyPolicy: "FAIL_IF_EXISTS" });
+    await measureReferenceOperation("kvs.set", () =>
+      kvs.set(activeRunKey, key, { keyPolicy: "FAIL_IF_EXISTS" }),
+    );
     return true;
   } catch (error) {
     const active = await readReferenceValue<string>(activeRunKey);
     if (active !== undefined) return active === key;
     throw error;
   }
+}
+
+async function detectRunFailure(run: ReferenceRun): Promise<void> {
+  const cancelledAt = await readReferenceValue<string>(cancellationKey(run));
+  const deleted = await readReferenceValue(deletionKey(run));
+  if (deleted) run.failure = "source_deleted";
+  else if (cancelledAt && run.requestedAt <= cancelledAt)
+    run.failure ??= "cancelled";
+  if (
+    run.startedAt &&
+    Date.now() - Date.parse(run.startedAt) > run.tuning.runTimeoutMs
+  )
+    run.failure ??= "processing_failed";
 }
 
 async function startNative(
@@ -162,8 +191,8 @@ async function startNative(
     return;
   }
   const result = await referenceRequest<{
-    result: string;
     links: { submitProgress: string };
+    result: string;
   }>(
     route`/jsm/assets/workspace/${run.workspaceId}/v1/importsource/${run.importSourceId}/executions`,
     budget,
@@ -201,15 +230,16 @@ export async function ingestChunk(
     route`/jsm/assets/workspace/${run.workspaceId}/v1/importsource/${run.importSourceId}/executions/${run.executionId}/data`,
     budget,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clientGeneratedId: `${run.id}:${run.index}`,
         completed: lastBatch,
         data,
       }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     },
   );
+  countReferenceMetric("chunksSubmitted");
   run.index++;
   if (lastBatch) run.phase = "polling";
   await saveRun(run);
@@ -219,11 +249,11 @@ export async function ingestChunk(
         route`/jsm/assets/workspace/${run.workspaceId}/v1/importsource/${run.importSourceId}/executions/${run.executionId}/progress`,
         budget,
         {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             objects: { processed: run.index, total: manifest.totals.keys },
           }),
+          headers: { "Content-Type": "application/json" },
+          method: "PUT",
         },
       );
     } catch {
@@ -232,6 +262,29 @@ export async function ingestChunk(
         index: run.index,
       });
     }
+  }
+}
+
+async function ingestChunks(
+  run: ReferenceRun,
+  budget: ProcessingBudget,
+): Promise<void> {
+  const tuning = run.tuning;
+  for (
+    let chunks = 0;
+    chunks < tuning.ingestionChunks && run.phase === "ingesting";
+    chunks++
+  ) {
+    budget.check();
+    if (chunks > 0) {
+      await detectRunFailure(run);
+      if (run.failure) {
+        run.phase = "polling";
+        await saveRun(run);
+        return;
+      }
+    }
+    await ingestChunk(run, budget);
   }
 }
 
@@ -289,37 +342,44 @@ async function finalizeRun(
   await deleteReferenceValues([uploadKey(run)]);
   if (run.failure === "source_deleted")
     await saveReferenceValue<SourceDeletion>(deletionKey(run), {
+      finished: false,
       importSourceId: run.importSourceId,
       testing: run.testing,
       workspaceId: run.workspaceId,
-      finished: false,
     });
   run.phase = "complete";
   await saveRun(run);
   await deleteReferenceValues([activeRunKey]);
   if (run.failure === "source_deleted") await queueSourceDeletion(run);
-  console.log("User reference processing complete", {
-    counts: summary.counts,
-    durationMs: summary.durationMs,
-    executionId: run.executionId,
-    phaseDurationsMs: summary.phaseDurationsMs,
-    retentionDurationMs: summary.retentionDurationMs,
-    failure: summary.failure,
-    runId: run.id,
-    selected: summary.selected,
-    status: summary.status,
-    unfinished: summary.unfinished,
-  });
+  logReferenceSummary(run, summary);
 }
 
 export async function advanceRun(
   key: string,
   worker = false,
   lookup: UserLookup = lookupUserByEmail,
-  budget = new ProcessingBudget(),
+  budget?: ProcessingBudget,
+  delivery?: { delayMs?: number; queuedAt?: number },
+): Promise<void> {
+  await withReferenceMetrics(
+    worker,
+    () => advanceRunStep(key, worker, lookup, budget),
+    delivery,
+  );
+}
+
+async function advanceRunStep(
+  key: string,
+  worker: boolean,
+  lookup: UserLookup,
+  suppliedBudget?: ProcessingBudget,
 ): Promise<void> {
   let run = await readReferenceValue<ReferenceRun>(key);
   if (!run) return;
+  const tuning = run.tuning;
+  const budget =
+    suppliedBudget ?? createWorkerBudget(tuning.finalizationBudgetMs);
+  observeReferenceRun(run);
   if (run.phase === "complete") {
     if ((await readReferenceValue<string>(activeRunKey)) === key)
       await deleteReferenceValues([activeRunKey]);
@@ -330,16 +390,7 @@ export async function advanceRun(
     return;
   }
   try {
-    const cancelledAt = await readReferenceValue<string>(cancellationKey(run));
-    const deleted = await readReferenceValue(deletionKey(run));
-    if (deleted) run.failure = "source_deleted";
-    else if (cancelledAt && run.requestedAt <= cancelledAt)
-      run.failure ??= "cancelled";
-    if (
-      run.startedAt &&
-      Date.now() - Date.parse(run.startedAt) > RUN_TIMEOUT_MS
-    )
-      run.failure ??= "processing_failed";
+    await detectRunFailure(run);
     if (
       run.deferredUntil &&
       Date.now() < run.deferredUntil &&
@@ -379,7 +430,7 @@ export async function advanceRun(
       await saveRun(run);
     }
     if (run.phase === "starting") await startNative(run, budget);
-    if (run.phase === "ingesting" && worker) await ingestChunk(run, budget);
+    if (run.phase === "ingesting" && worker) await ingestChunks(run, budget);
     else if (run.phase === "polling") await pollNative(run, budget);
     if (run.phase === "discovery") await discoverWork(run, budget);
     if (run.phase === "processing") await processWork(run, lookup, budget);
@@ -390,6 +441,8 @@ export async function advanceRun(
     }
   } catch (error) {
     if (error instanceof ContinueLater) {
+      countReferenceMetric("continuations");
+      countReferenceMetric("deferredMs", error.delaySeconds * 1000);
       run = (await readReferenceValue<ReferenceRun>(key)) ?? run;
       run.deferredUntil = Date.now() + error.delaySeconds * 1000;
       await saveRun(run);
@@ -400,18 +453,18 @@ export async function advanceRun(
     run = (await readReferenceValue<ReferenceRun>(key)) ?? run;
     run.failures++;
     console.warn("Import lifecycle step failed", {
-      executionId: run.executionId,
-      phase: run.phase,
-      runId: run.id,
-      failures: run.failures,
       errorCode:
         error instanceof AppError
           ? error.code
           : error instanceof SchemaError
             ? "schema_invalid"
             : "unexpected",
+      executionId: run.executionId,
+      failures: run.failures,
       httpStatus:
         error instanceof ProductRequestError ? error.status : undefined,
+      phase: run.phase,
+      runId: run.id,
     });
     if (error instanceof SchemaError) run.failure = "schema_invalid";
     if (error instanceof ProductRequestError && error.status === 404) {
@@ -435,7 +488,7 @@ export async function advanceRun(
 
 export async function cleanupSource(
   scope: ReferenceScope,
-  budget = new ProcessingBudget(),
+  budget = createWorkerBudget(defaultConfig.tuning.finalizationBudgetMs),
 ): Promise<void> {
   const active = await readReferenceValue<string>(activeRunKey);
   if (active?.startsWith(manifestPrefix(scope))) {
@@ -485,7 +538,13 @@ export async function referenceHandler(
   )
     throw new Error("Import concurrency control is required");
   if (typeof event.body.runKey === "string")
-    await advanceRun(event.body.runKey);
+    await advanceRun(
+      event.body.runKey,
+      false,
+      lookupUserByEmail,
+      undefined,
+      event.body as ReferenceEvent,
+    );
   else if (event.body.scope)
     await cleanupSource(event.body.scope as ReferenceScope);
 }

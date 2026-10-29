@@ -4,6 +4,7 @@ import {
   makeRun,
   storage,
 } from "../../tests/helpers/reference-storage";
+import { defaultConfig } from "./config";
 import {
   commitInventoryPage,
   inventoryKey,
@@ -24,6 +25,12 @@ import {
   fetchAsset,
   updateReference,
 } from "./reference-assets";
+import { InvocationMetricSchema } from "./reference-metric-schemas";
+import {
+  METRICS_PREFIX,
+  observeReferenceRun,
+  withReferenceMetrics,
+} from "./reference-metrics";
 import {
   aggregateWork,
   discoverWork,
@@ -42,10 +49,11 @@ vi.mock("@forge/kvs", async () => {
     "../../tests/helpers/reference-storage.js"
   );
   return {
-    kvs: memory.api,
     WhereConditions: { beginsWith: (prefix: string) => prefix },
+    kvs: memory.api,
   };
 });
+
 vi.mock("./reference-assets", async (original) => ({
   ...(await original<typeof import("./reference-assets")>()),
   discoverAssets: vi.fn(),
@@ -53,11 +61,25 @@ vi.mock("./reference-assets", async (original) => ({
   updateReference: vi.fn(),
 }));
 
-const budget = () => new ProcessingBudget();
+const budget = () => new ProcessingBudget(Date.now, 240_000);
+
 const matched = vi.fn(async () => ({
-  status: "matched" as const,
   accountId: "account",
+  status: "matched" as const,
 }));
+
+function metrics() {
+  return vi
+    .mocked(console.log)
+    .mock.calls.map(([line]) => String(line))
+    .filter((line) => line.startsWith(METRICS_PREFIX))
+    .map((line) =>
+      InvocationMetricSchema.parse(
+        JSON.parse(line.slice(METRICS_PREFIX.length)),
+      ),
+    );
+}
+
 async function seed(run: ReferenceRun, ids: string[]) {
   await saveRun(run);
   await commitInventoryPage(
@@ -73,8 +95,10 @@ async function seed(run: ReferenceRun, ids: string[]) {
   run.phase = "processing";
   await saveRun(run);
 }
+
 const work = (run: ReferenceRun, id: string) =>
   storage.values.get(workKey(run, id)) as WorkItem | undefined;
+
 beforeEach(() => {
   storage.reset();
   vi.mocked(discoverAssets).mockReset();
@@ -83,8 +107,10 @@ beforeEach(() => {
     .mockImplementation(async (_run, id) => makeAsset(id));
   vi.mocked(updateReference).mockReset().mockResolvedValue(undefined);
   matched.mockClear();
+  vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("aggregateWork", () => {
@@ -102,9 +128,9 @@ describe("aggregateWork", () => {
     run.completedAt = "2026-10-28T12:01:00Z";
     const summary = await persistSummary(run);
     expect(summary).toMatchObject({
+      counts: { updated: 1 },
       status: "failed",
       unfinished: 1,
-      counts: { updated: 1 },
     });
     expect(storage.values.get(summaryKey(run))).toEqual(summary);
   });
@@ -125,13 +151,13 @@ describe("commitInventoryPage", () => {
       const first = items[0];
       if (first) storage.values.set(first.key, first.value);
       return {
-        successfulKeys: first ? [{ key: first.key }] : [],
         failedKeys: [
           {
-            key: items[1]?.key ?? "",
             error: { code: "THROTTLED", message: "Retry" },
+            key: items[1]?.key ?? "",
           },
         ],
+        successfulKeys: first ? [{ key: first.key }] : [],
       };
     });
     await expect(
@@ -156,6 +182,28 @@ describe("commitInventoryPage", () => {
 });
 
 describe("discoverWork", () => {
+  it("retains the fixed timestamp and AQL position across budget exits", async () => {
+    const run = makeRun();
+    await saveRun(run);
+    let time = 0;
+    vi.mocked(discoverAssets).mockImplementation(async () => {
+      time = 80_000;
+      return { assetIds: ["a"], last: false, nextStart: 1 };
+    });
+    await expect(
+      discoverWork(run, new ProcessingBudget(() => time, 100_000)),
+    ).rejects.toBeInstanceOf(ContinueLater);
+    expect(storage.values.has(inventoryKey(run, 0))).toBe(true);
+    vi.mocked(discoverAssets).mockResolvedValue({
+      assetIds: ["b"],
+      last: true,
+      nextStart: 2,
+    });
+    await discoverWork(run, budget());
+    expect(run.selected).toBe(2);
+    expect(run.selectionStartedAt).toBe("2026-10-28T12:00:00.000Z");
+  });
+
   it("seals the union of AQL candidates and pending retries before reference writes", async () => {
     const run = makeRun();
     await saveRun(run);
@@ -186,119 +234,40 @@ describe("discoverWork", () => {
       ),
     ).toBe(true);
   });
-  it("retains the fixed timestamp and AQL position across budget exits", async () => {
-    const run = makeRun();
-    await saveRun(run);
-    let time = 0;
-    vi.mocked(discoverAssets).mockImplementation(async () => {
-      time = 80_000;
-      return { assetIds: ["a"], last: false, nextStart: 1 };
-    });
-    await expect(
-      discoverWork(run, new ProcessingBudget(() => time, 100_000)),
-    ).rejects.toBeInstanceOf(ContinueLater);
-    expect(storage.values.has(inventoryKey(run, 0))).toBe(true);
-    vi.mocked(discoverAssets).mockResolvedValue({
-      assetIds: ["b"],
-      last: true,
-      nextStart: 2,
-    });
-    await discoverWork(run, budget());
-    expect(run.selected).toBe(2);
-    expect(run.selectionStartedAt).toBe("2026-10-28T12:00:00.000Z");
-  });
 });
 
 describe("processWork", () => {
-  it("replaces stale references with one account, skips matches, and never touches unrelated attributes", async () => {
-    const run = makeRun();
-    await seed(run, ["changed", "same"]);
-    vi.mocked(fetchAsset).mockImplementation(async (_run, id) =>
-      makeAsset(id, { reference: id === "same" ? "account" : "old" }),
-    );
-    await processWork(run, matched, budget());
-    expect(updateReference).toHaveBeenCalledExactlyOnceWith(
-      run,
-      "changed",
-      "account",
-      expect.any(ProcessingBudget),
-    );
-    expect(work(run, "changed")?.outcome).toBe("updated");
-    expect(work(run, "same")?.outcome).toBe("unchanged");
-    await processWork(run, matched, budget());
-    expect(matched).toHaveBeenCalledTimes(2);
-    expect(storage.values.has(pendingKey(run, "changed"))).toBe(false);
-  });
-  it("leaves unmatched and unknown-activity assets untouched but reports errors and retains retries", async () => {
-    const run = makeRun();
-    await seed(run, ["missing", "unknown"]);
-    vi.mocked(fetchAsset).mockImplementation(async (_run, id) =>
-      makeAsset(id, {
-        active: id === "unknown" ? "?" : true,
-        reference: "old",
-      }),
-    );
-    await processWork(
-      run,
-      async () => ({ status: "unresolved", reason: "unmatched" }),
-      budget(),
-    );
-    await aggregateWork(run, budget());
-    expect(updateReference).not.toHaveBeenCalled();
-    expect(run.aggregation).toMatchObject({
-      total: 2,
-      counts: { unresolved: 2 },
-      reasons: { unknown_activity: 1, unmatched: 1 },
+  it("applies the stored item cap and concurrency across checkpointed continuations", async () => {
+    const run = makeRun({
+      tuning: {
+        ...defaultConfig.tuning,
+        referenceConcurrency: 3,
+        referenceItems: 5,
+      },
     });
-    expect(storage.values.has(pendingKey(run, "missing"))).toBe(true);
-    const logs = JSON.stringify(vi.mocked(console.warn).mock.calls);
-    expect(logs).toContain("ASSET-missing");
-    expect(logs).not.toContain("someone@example.test");
-  });
-  it("removes pending retries only for authoritative inactivity or confirmed deletion", async () => {
-    const run = makeRun();
-    await seed(run, ["inactive", "deleted", "forbidden"]);
-    vi.mocked(fetchAsset).mockImplementation(async (_run, id) => {
-      if (id === "deleted") throw new ProductRequestError(404);
-      if (id === "forbidden") throw new ProductRequestError(403);
-      return makeAsset(id, { active: false, reference: "old" });
-    });
-    await processWork(run, matched, budget());
-    expect(work(run, "inactive")?.outcome).toBe("inactive");
-    expect(work(run, "deleted")?.outcome).toBe("deleted");
-    expect(work(run, "forbidden")?.reason).toBe("asset_fetch_failed");
-    expect(storage.values.has(pendingKey(run, "forbidden"))).toBe(true);
-    expect(updateReference).not.toHaveBeenCalled();
-    expect(matched).not.toHaveBeenCalled();
-  });
-  it("persists recovery state before lookup and retries cleanup without repeating a successful write", async () => {
-    const run = makeRun();
-    await seed(run, ["a"]);
+    const ids = Array.from({ length: 8 }, (_, index) => String(index));
+    await seed(run, ids);
+    let active = 0;
+    let maximum = 0;
     const lookup = vi.fn(async () => {
-      expect(storage.values.has(pendingKey(run, "a"))).toBe(true);
-      return { status: "matched" as const, accountId: "account" };
-    });
-    storage.api.batchDelete.mockResolvedValueOnce({
-      successfulKeys: [],
-      failedKeys: [
-        {
-          key: pendingKey(run, "a"),
-          error: { code: "THROTTLED", message: "retry" },
-        },
-      ],
-    });
-    await expect(processWork(run, lookup, budget())).rejects.toMatchObject({
-      code: "KVS_DELETE_FAILED",
-    });
-    expect(work(run, "a")).toMatchObject({
-      outcome: "updated",
-      pendingCleanup: true,
+      active++;
+      maximum = Math.max(maximum, active);
+      await Promise.resolve();
+      active--;
+      return { accountId: "account", status: "matched" as const };
     });
     await processWork(run, lookup, budget());
-    expect(work(run, "a")?.pendingCleanup).toBe(false);
-    expect(updateReference).toHaveBeenCalledTimes(1);
-    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledTimes(5);
+    expect(maximum).toBe(3);
+    expect(run.processingOffset).toBe(5);
+    expect(run.phase).toBe("processing");
+    await processWork(run, lookup, budget());
+    expect(lookup).toHaveBeenCalledTimes(8);
+    expect(maximum).toBe(3);
+    expect(run.phase).toBe("aggregation");
+    for (const id of ids) expect(work(run, id)?.outcome).toBe("updated");
   });
+
   it("bounds rate-limited attempts and retains failed replacements for the next full import", async () => {
     const run = makeRun();
     await seed(run, ["a"]);
@@ -318,7 +287,7 @@ describe("processWork", () => {
       outcome: "unresolved",
       reason: "update_failed",
     });
-    const next = makeRun({ id: "next", executionId: "next-execution" });
+    const next = makeRun({ executionId: "next-execution", id: "next" });
     vi.mocked(discoverAssets).mockResolvedValue({
       assetIds: [],
       last: true,
@@ -327,6 +296,211 @@ describe("processWork", () => {
     await discoverWork(next, budget());
     expect(next.selected).toBe(1);
   });
+
+  it("leaves unmatched and unknown-activity assets untouched but reports errors and retains retries", async () => {
+    const run = makeRun();
+    await seed(run, ["missing", "unknown"]);
+    vi.mocked(fetchAsset).mockImplementation(async (_run, id) =>
+      makeAsset(id, {
+        active: id === "unknown" ? "?" : true,
+        reference: "old",
+      }),
+    );
+    await processWork(
+      run,
+      async () => ({ reason: "unmatched", status: "unresolved" }),
+      budget(),
+    );
+    await aggregateWork(run, budget());
+    expect(updateReference).not.toHaveBeenCalled();
+    expect(run.aggregation).toMatchObject({
+      counts: { unresolved: 2 },
+      reasons: { unknown_activity: 1, unmatched: 1 },
+      total: 2,
+    });
+    expect(storage.values.has(pendingKey(run, "missing"))).toBe(true);
+    expect(work(run, "missing")).toMatchObject({
+      assetKey: "ASSET-missing",
+      reason: "unmatched",
+    });
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    200, 1000,
+  ])("logs one bounded summary for %i unresolved assets and retains their details", async (count) => {
+    const run = makeRun({
+      tuning: { ...defaultConfig.tuning, referenceItems: count },
+    });
+    const ids = Array.from({ length: count }, (_, index) => String(index));
+    await seed(run, ids);
+    await withReferenceMetrics(false, async () => {
+      observeReferenceRun(run);
+      await processWork(
+        run,
+        async () => ({ reason: "unmatched", status: "unresolved" }),
+        budget(),
+      );
+    });
+    expect(console.log).toHaveBeenCalledTimes(1);
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(metrics()[0]).toMatchObject({
+      counts: { assetAttempts: count },
+      outcomes: { unresolved: count },
+      reasons: { unmatched: count },
+    });
+    const logs = String(vi.mocked(console.log).mock.calls[0]?.[0]);
+    expect(Buffer.byteLength(logs)).toBeLessThan(4096);
+    expect(logs).not.toContain("ASSET-");
+    expect(logs).not.toContain("someone@example.test");
+    for (const id of ids) {
+      expect(work(run, id)).toMatchObject({
+        assetKey: `ASSET-${id}`,
+        outcome: "unresolved",
+        reason: "unmatched",
+      });
+      expect(storage.values.has(pendingKey(run, id))).toBe(true);
+    }
+  });
+
+  it("logs partial completed work when the time budget ends a batch", async () => {
+    const run = makeRun({
+      tuning: { ...defaultConfig.tuning, referenceConcurrency: 1 },
+    });
+    await seed(run, ["a", "b", "c"]);
+    let time = 0;
+    const lookup = vi.fn(async () => {
+      time += 45_000;
+      return { reason: "unmatched" as const, status: "unresolved" as const };
+    });
+    await expect(
+      withReferenceMetrics(false, async () => {
+        observeReferenceRun(run);
+        await processWork(
+          run,
+          lookup,
+          new ProcessingBudget(() => time, 110_000),
+        );
+      }),
+    ).rejects.toBeInstanceOf(ContinueLater);
+    expect(metrics()).toHaveLength(1);
+    expect(metrics()[0]).toMatchObject({
+      counts: { assetAttempts: 2 },
+      outcomes: { unresolved: 2 },
+      reasons: { unmatched: 2 },
+    });
+    expect(run.processingOffset).toBe(2);
+    expect(work(run, "c")?.outcome).toBeUndefined();
+  });
+
+  it("omits outcomes that fail to persist from the invocation summary", async () => {
+    const run = makeRun();
+    await seed(run, ["a"]);
+    const write = storage.api.set.getMockImplementation();
+    storage.api.set.mockImplementation(async (key, value, options) => {
+      if (key === workKey(run, "a") && (value as WorkItem).outcome)
+        throw new Error("storage failed");
+      return write?.(key, value, options);
+    });
+    await expect(
+      withReferenceMetrics(false, async () => {
+        observeReferenceRun(run);
+        await processWork(run, matched, budget());
+      }),
+    ).rejects.toMatchObject({ code: "KVS_SET_FAILED" });
+    expect(metrics()).toHaveLength(1);
+    expect(metrics()[0]?.counts.assetAttempts).toBe(1);
+    expect(metrics()[0]?.outcomes).toEqual({});
+    expect(metrics()[0]?.reasons).toEqual({});
+    expect(work(run, "a")?.outcome).toBeUndefined();
+    expect(storage.values.has(pendingKey(run, "a"))).toBe(true);
+  });
+
+  it("persists recovery state before lookup and retries cleanup without repeating a successful write", async () => {
+    const run = makeRun();
+    await seed(run, ["a"]);
+    const lookup = vi.fn(async () => {
+      expect(storage.values.has(pendingKey(run, "a"))).toBe(true);
+      return { accountId: "account", status: "matched" as const };
+    });
+    storage.api.batchDelete.mockResolvedValueOnce({
+      failedKeys: [
+        {
+          error: { code: "THROTTLED", message: "retry" },
+          key: pendingKey(run, "a"),
+        },
+      ],
+      successfulKeys: [],
+    });
+    await expect(processWork(run, lookup, budget())).rejects.toMatchObject({
+      code: "KVS_DELETE_FAILED",
+    });
+    expect(work(run, "a")).toMatchObject({
+      outcome: "updated",
+      pendingCleanup: true,
+    });
+    await processWork(run, lookup, budget());
+    expect(work(run, "a")?.pendingCleanup).toBe(false);
+    expect(updateReference).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes pending retries only for authoritative inactivity or confirmed deletion", async () => {
+    const run = makeRun();
+    await seed(run, ["inactive", "deleted", "forbidden"]);
+    vi.mocked(fetchAsset).mockImplementation(async (_run, id) => {
+      if (id === "deleted") throw new ProductRequestError(404);
+      if (id === "forbidden") throw new ProductRequestError(403);
+      return makeAsset(id, { active: false, reference: "old" });
+    });
+    await processWork(run, matched, budget());
+    expect(work(run, "inactive")?.outcome).toBe("inactive");
+    expect(work(run, "deleted")?.outcome).toBe("deleted");
+    expect(work(run, "forbidden")?.reason).toBe("asset_fetch_failed");
+    expect(storage.values.has(pendingKey(run, "forbidden"))).toBe(true);
+    expect(updateReference).not.toHaveBeenCalled();
+    expect(matched).not.toHaveBeenCalled();
+  });
+
+  it("replaces stale references with one account, skips matches, and never touches unrelated attributes", async () => {
+    const run = makeRun();
+    await seed(run, ["changed", "same"]);
+    vi.mocked(fetchAsset).mockImplementation(async (_run, id) =>
+      makeAsset(id, { reference: id === "same" ? "account" : "old" }),
+    );
+    await processWork(run, matched, budget());
+    expect(updateReference).toHaveBeenCalledExactlyOnceWith(
+      run,
+      "changed",
+      "account",
+      expect.any(ProcessingBudget),
+    );
+    expect(work(run, "changed")?.outcome).toBe("updated");
+    expect(work(run, "same")?.outcome).toBe("unchanged");
+    await processWork(run, matched, budget());
+    expect(matched).toHaveBeenCalledTimes(2);
+    expect(storage.values.has(pendingKey(run, "changed"))).toBe(false);
+  });
+
+  it("reports reused durable results separately from newly completed outcomes", async () => {
+    const run = makeRun();
+    await seed(run, ["a", "b"]);
+    storage.values.set(workKey(run, "a"), {
+      ...work(run, "a"),
+      outcome: "unchanged",
+    });
+    await withReferenceMetrics(false, async () => {
+      observeReferenceRun(run);
+      await processWork(run, matched, budget());
+    });
+    expect(metrics()[0]).toMatchObject({
+      counts: { assetAttempts: 1, reusedResults: 1 },
+      outcomes: { updated: 1 },
+    });
+    expect(matched).toHaveBeenCalledTimes(1);
+    expect(work(run, "a")?.outcome).toBe("unchanged");
+  });
+
   it("waits for other in-flight items when one fails to persist", async () => {
     const run = makeRun();
     await seed(run, ["a", "b"]);
@@ -390,17 +564,18 @@ describe("retention", () => {
       storage.metrics.queriedKeys.every((key) => key.includes(":manifest:")),
     ).toBe(true);
   });
+
   it("resumes partial deletion without losing its inventory", async () => {
     const run = makeRun();
     await seed(run, ["a", "b"]);
     storage.api.batchDelete.mockResolvedValueOnce({
-      successfulKeys: [{ key: workKey(run, "a") }],
       failedKeys: [
         {
-          key: workKey(run, "b"),
           error: { code: "THROTTLED", message: "retry" },
+          key: workKey(run, "b"),
         },
       ],
+      successfulKeys: [{ key: workKey(run, "a") }],
     });
     await expect(pruneReferenceRun(run, budget())).rejects.toMatchObject({
       code: "KVS_DELETE_FAILED",

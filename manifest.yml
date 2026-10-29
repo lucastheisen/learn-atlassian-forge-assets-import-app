@@ -27,6 +27,7 @@ modules:
       key: stopImport
     - handler: index.importStatus
       key: importStatus
+    # createWorkerBudget subtracts finalizationBudgetMs from the actual timeout of each worker.
     - handler: index.workerHandler
       key: workerQueueFunction
       timeoutSeconds: 300
@@ -68,6 +69,56 @@ modules:
             contentType: application/json
             key: status-ok
             statusCode: 200
+          - body: |
+              {"status":202,"title":"import pending","phase":"queued"}
+            contentType: application/json
+            key: smoke-pending-queued
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"starting"}
+            contentType: application/json
+            key: smoke-pending-starting
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"ingesting"}
+            contentType: application/json
+            key: smoke-pending-ingesting
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"polling"}
+            contentType: application/json
+            key: smoke-pending-polling
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"discovery"}
+            contentType: application/json
+            key: smoke-pending-discovery
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"processing"}
+            contentType: application/json
+            key: smoke-pending-processing
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"aggregation"}
+            contentType: application/json
+            key: smoke-pending-aggregation
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"finalizing"}
+            contentType: application/json
+            key: smoke-pending-finalizing
+            statusCode: 202
+          - body: |
+              {"status":202,"title":"import pending","phase":"objects"}
+            contentType: application/json
+            key: smoke-pending-objects
+            statusCode: 202
+          - body: |
+              {"status":409,"title":"smoke assertion failed"}
+            contentType: application/json
+            key: smoke-failed
+            statusCode: 409
           - body: |
               {"status":400,"title":"bad request"}
             contentType: text/plain

@@ -7,6 +7,7 @@
     "generate:assets-schema-and-mapping": "tsx generate-assets-schema-and-mapping.ts",
     "generate:secret-key": "tsx generate-secret-key.ts",
     "smoke:import": "tsx smoke-import.ts",
+    "smoke:import:report": "tsx smoke-import-report.ts",
     "smoke:upload": "tsx smoke-upload.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -22,6 +23,7 @@
     "json-schema-to-typescript": "^15.0.4",
     "openapi-typescript": "^7.13.0",
     "tsx": "^4.22.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "zod": "^3.25.76"
   }
 }

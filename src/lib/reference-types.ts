@@ -1,19 +1,25 @@
-export const associationReasons = [
-  "ambiguous",
-  "asset_fetch_failed",
-  "asset_type_changed",
-  "email_unavailable",
-  "inactive_account",
-  "invalid_identity",
-  "lookup_failed",
-  "missing_identity",
-  "unknown_activity",
-  "unmatched",
-  "update_failed",
-] as const;
+import type { ImportTuning } from "./config";
+import type {
+  AssociationReason,
+  Outcome,
+  OutcomeCounts,
+  ReferenceScope,
+  RunFailure,
+  RunPhase,
+} from "./reference-schemas";
 
-export type AssociationReason = (typeof associationReasons)[number];
+export type {
+  AssociationReason,
+  Outcome,
+  OutcomeCounts,
+  ReferenceScope,
+  RunFailure,
+  RunPhase,
+  RunSummary,
+} from "./reference-schemas";
+
 export type AssetFields = Record<string, readonly unknown[]>;
+
 export type LookupResult =
   | { accountId: string; status: "matched" }
   | { reason: AssociationReason; status: "unresolved" };
@@ -43,37 +49,27 @@ export class SchemaError extends Error {
 
 export class ProcessingBudget {
   readonly deadline: number;
+
   constructor(
-    readonly now: () => number = Date.now,
-    durationMs = 110_000,
+    readonly now: () => number,
+    durationMs: number,
   ) {
     this.deadline = now() + durationMs;
   }
+
   check(requiredMs = 25_000): void {
     if (this.deadline - this.now() < requiredMs) throw new ContinueLater();
   }
 }
 
-export interface ReferenceScope {
-  importSourceId: string;
-  testing: boolean;
-  workspaceId: string;
-}
-
 export interface ReferenceSchema {
-  attributeNames?: Record<string, string>;
   activeAttributeId: string;
+  attributeNames?: Record<string, string>;
   emailAttributeId: string;
   objectTypeId: string;
   userAttributeId: string;
 }
 
-export type Outcome =
-  | "deleted"
-  | "inactive"
-  | "unchanged"
-  | "unresolved"
-  | "updated";
 export interface WorkItem {
   assetId: string;
   assetKey?: string;
@@ -87,17 +83,9 @@ export interface WorkItem {
 
 export interface PendingReference {
   assetId: string;
+  httpStatus?: number;
   reason?: AssociationReason;
   runId: string;
-  httpStatus?: number;
-}
-
-export interface OutcomeCounts {
-  deleted: number;
-  inactive: number;
-  unchanged: number;
-  unresolved: number;
-  updated: number;
 }
 
 export const emptyCounts = (): OutcomeCounts => ({
@@ -116,63 +104,47 @@ export interface Aggregation {
   total: number;
 }
 
-export type RunPhase =
-  | "queued"
-  | "starting"
-  | "ingesting"
-  | "polling"
-  | "discovery"
-  | "processing"
-  | "aggregation"
-  | "finalizing"
-  | "complete";
-export type RunFailure =
-  | "cancelled"
-  | "discovery_failed"
-  | "native_failed"
-  | "native_timeout"
-  | "processing_failed"
-  | "schema_invalid"
-  | "source_deleted";
-
 export interface ReferenceRun extends ReferenceScope {
   aggregation: Aggregation;
   aqlStart: number;
   completedAt?: string;
-  discovery: "aql" | "retries" | "sealed";
   deferredUntil?: number;
+  discovery: "aql" | "retries" | "sealed";
   executionId?: string;
   failure?: RunFailure;
+  failures: number;
   id: string;
   index: number;
+  inputChunks: number;
+  inputRecords: number;
   inventoryPages: number;
-  failures: number;
   nativeTerminal?: boolean;
+  phase: RunPhase;
   phaseDurationsMs?: Partial<Record<RunPhase, number>>;
   phaseStartedAt?: number;
-  timedPhase?: RunPhase;
-  phase: RunPhase;
   previousExecutionId?: string;
   processingOffset: number;
   processingPage: number;
+  pruneMetadata?: number;
+  pruneOffset?: number;
+  prunePage?: number;
   requestedAt: string;
+  retention?: {
+    done: boolean;
+    keep: { key: string; startedAt: string }[];
+    pending: string[];
+    scanned: boolean;
+  };
   retentionDurationMs?: number;
   retryPartition?: number;
   schema?: ReferenceSchema;
   selected: number;
   selectionStartedAt?: string;
-  startedAt?: string;
   startPrepared?: boolean;
+  startedAt?: string;
+  timedPhase?: RunPhase;
+  tuning: ImportTuning;
   uploadId: string;
-  prunePage?: number;
-  pruneOffset?: number;
-  pruneMetadata?: number;
-  retention?: {
-    keep: { key: string; startedAt: string }[];
-    pending: string[];
-    scanned: boolean;
-    done: boolean;
-  };
 }
 
 export interface InventoryPage {
@@ -181,22 +153,4 @@ export interface InventoryPage {
   nextDiscovery: ReferenceRun["discovery"];
   nextRetryPartition?: number;
   sealed: boolean;
-}
-
-export interface RunSummary extends ReferenceScope {
-  completedAt: string;
-  counts: OutcomeCounts;
-  detailsPrefix: string;
-  durationMs: number;
-  executionId?: string;
-  failure?: RunFailure;
-  phaseDurationsMs: Partial<Record<RunPhase, number>>;
-  reasons: Partial<Record<AssociationReason, number>>;
-  runId: string;
-  retentionDurationMs: number;
-  selected: number;
-  selectionComplete: boolean;
-  startedAt: string;
-  status: "failed" | "success" | "with_errors";
-  unfinished: number;
 }

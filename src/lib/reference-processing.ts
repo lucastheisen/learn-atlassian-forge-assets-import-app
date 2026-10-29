@@ -21,6 +21,11 @@ import {
   updateReference,
 } from "./reference-assets";
 import {
+  countReferenceMetric,
+  countReferenceOutcome,
+  measureReferenceOperation,
+} from "./reference-metrics";
+import {
   ContinueLater,
   type InventoryPage,
   type PendingReference,
@@ -45,6 +50,8 @@ export async function discoverWork(
     if (!page) {
       if (run.discovery === "aql") {
         const result = await discoverAssets(run, budget);
+        countReferenceMetric("aqlPages");
+        countReferenceMetric("aqlCandidates", result.assetIds.length);
         page = {
           assetIds: result.assetIds,
           nextAqlStart: result.nextStart,
@@ -56,10 +63,15 @@ export async function discoverWork(
           partition = run.retryPartition ?? 0;
           retryCursor = undefined;
         }
-        const result = await nextPage<PendingReference>(
-          pendingPartitionPrefix(run, partition),
-          retryCursor,
+        const result = await measureReferenceOperation("retry.query", () =>
+          nextPage<PendingReference>(
+            pendingPartitionPrefix(run, partition),
+            retryCursor,
+          ),
         );
+        countReferenceMetric("retryPages");
+        countReferenceMetric("retryEntries", result.results.length);
+        if (!result.results.length) countReferenceMetric("emptyRetryPages");
         retryCursor = result.nextCursor;
         page = {
           assetIds: [
@@ -83,7 +95,7 @@ export async function discoverWork(
         continue;
       }
     } else {
-      // A staged page survives invocations; query cursors deliberately do not.
+      // A staged page survives invocations. Query cursors deliberately do not.
       retryCursor = undefined;
       partition = -1;
     }
@@ -96,13 +108,6 @@ export async function discoverWork(
 async function finishItem(run: ReferenceRun, item: WorkItem): Promise<void> {
   if (item.outcome === "unresolved") {
     await savePending(run, item);
-    console.warn("User association unresolved", {
-      assetId: item.assetId,
-      assetKey: item.assetKey,
-      executionId: run.executionId,
-      httpStatus: item.httpStatus,
-      reason: item.reason,
-    });
   } else {
     item.pendingCleanup = true;
     await saveReferenceValue(workKey(run, item.assetId), item);
@@ -110,6 +115,7 @@ async function finishItem(run: ReferenceRun, item: WorkItem): Promise<void> {
     item.pendingCleanup = false;
   }
   await saveReferenceValue(workKey(run, item.assetId), item);
+  if (item.outcome) countReferenceOutcome(item.outcome, item.reason);
 }
 
 async function processItem(
@@ -120,12 +126,14 @@ async function processItem(
 ): Promise<void> {
   if (item.outcome) {
     if (item.pendingCleanup) await finishItem(run, item);
+    else countReferenceMetric("reusedResults");
     return;
   }
   if (!run.schema) throw new Error("Reference schema is missing");
   budget.check();
   await savePending(run, item);
   item.attempts++;
+  countReferenceMetric("assetAttempts");
   await saveReferenceValue(workKey(run, item.assetId), item);
   let stage: "asset_fetch_failed" | "lookup_failed" | "update_failed" =
     "asset_fetch_failed";
@@ -201,8 +209,8 @@ export async function processWork(
   run: ReferenceRun,
   lookup: UserLookup,
   budget: ProcessingBudget,
-  itemCap = 100,
-  concurrency = 4,
+  itemCap = run.tuning.referenceItems,
+  concurrency = run.tuning.referenceConcurrency,
 ): Promise<void> {
   let processed = 0;
   while (run.processingPage < run.inventoryPages && processed < itemCap) {

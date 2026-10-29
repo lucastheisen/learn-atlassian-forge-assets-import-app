@@ -51,7 +51,7 @@ So the _only_ value of this import process would be that _IF_ we can get the edg
 4. The reference consumer polls that execution until the native result is successful, seals a durable workset of changed/empty-reference user assets plus pending retries, and associates each eligible asset with one Jira account.
 5. Processing checkpoints, durable retries, and a five-minute recovery trigger handle interruptions. A compact terminal summary is persisted before admission is released. The latest three runs are retained independently of pending retries.
 
-See [User references after import](docs/USER_REFERENCE_SYNC.md) for the code-defined schema conventions, replaceable lookup contract, timing limits, status storage, recovery, and development verification. Native import completion can precede reference completion; this feature adds no report UI or notification channel.
+See [User references after import](docs/USER_REFERENCE_SYNC.md) for the code-defined schema conventions, replaceable lookup contract, timing limits, status storage, recovery, and development verification. Native import completion can precede reference completion. This feature adds no report UI or notification channel.
 
 ## See Also
 

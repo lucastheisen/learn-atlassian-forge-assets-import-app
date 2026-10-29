@@ -1,6 +1,7 @@
 import { route } from "@forge/api";
 import type { components } from "./assets-api";
 import { referenceRequest } from "./reference-api";
+import { type ExecutionStatus, NativeStatusSchema } from "./reference-schemas";
 import {
   type AssetFields,
   type ProcessingBudget,
@@ -12,21 +13,14 @@ import {
 } from "./reference-types";
 
 type Attribute = components["schemas"]["ObjectTypeAttribute"];
-export type UserAsset = components["schemas"]["Object"];
+
 type ImportSource = components["schemas"]["ImportSourceResponse"];
 
-export interface ExecutionStatus {
-  status: "INGESTING" | "PROCESSING" | "DONE" | "CANCELLED";
-  progressResult?: {
-    errorMessages?: unknown;
-    objectTypeResultMap?: Record<string, { errorMessages?: unknown }>;
-    result?: string;
-    status?: string;
-  };
-}
+export type UserAsset = components["schemas"]["Object"];
 
 const noErrors = (value: unknown) =>
   value == null || (Array.isArray(value) && value.length === 0);
+
 export const nativeSucceeded = (status: ExecutionStatus): boolean =>
   status.status === "DONE" &&
   status.progressResult?.result === "OK" &&
@@ -45,9 +39,7 @@ export async function executionStatus(
     route`/jsm/assets/workspace/${run.workspaceId}/v1/importsource/${run.importSourceId}/executions/${run.executionId}/status`,
     budget,
   );
-  if (
-    !["INGESTING", "PROCESSING", "DONE", "CANCELLED"].includes(result.status)
-  ) {
+  if (!NativeStatusSchema.safeParse(result.status).success) {
     throw new Error("Unknown Assets execution status");
   }
   return result;
@@ -138,11 +130,11 @@ export async function discoverAssets(
     route`/jsm/assets/workspace/${run.workspaceId}/v1/object/aql?startAt=${run.aqlStart}&maxResults=${100}&includeAttributes=${"false"}`,
     budget,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         qlQuery: candidateAql(run.schema.objectTypeId, run.selectionStartedAt),
       }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     },
   );
   if (!Array.isArray(result.values) || result.startAt !== run.aqlStart)
@@ -204,17 +196,17 @@ export async function updateReference(
     route`/jsm/assets/workspace/${run.workspaceId}/v1/object/${assetId}`,
     budget,
     {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        objectTypeId: run.schema.objectTypeId,
         attributes: [
           {
-            objectTypeAttributeId: run.schema.userAttributeId,
             objectAttributeValues: [{ value: accountId }],
+            objectTypeAttributeId: run.schema.userAttributeId,
           },
         ],
+        objectTypeId: run.schema.objectTypeId,
       }),
+      headers: { "Content-Type": "application/json" },
+      method: "PUT",
     },
   );
 }

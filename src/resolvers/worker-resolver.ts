@@ -4,6 +4,7 @@ import {
   importConcurrency,
   type ReferenceEvent,
 } from "../lib/reference-queues";
+import { lookupUserByEmail } from "../lib/user-lookup";
 
 export const workerHandler = async (
   event: AsyncEvent<ReferenceEvent>,
@@ -14,5 +15,11 @@ export const workerHandler = async (
   ) {
     throw new Error("Import concurrency control is required");
   }
-  await advanceRun(event.body.runKey, true);
+  await advanceRun(
+    event.body.runKey,
+    true,
+    lookupUserByEmail,
+    undefined,
+    event.body,
+  );
 };
