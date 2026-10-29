@@ -1,5 +1,4 @@
-// Field names here are load-bearing: they must match the mapping configured
-// against the real and Smoke Test import sources (see docs/DEVELOPMENT.md).
+// Field names must match the configured import mappings (see docs/DEVELOPMENT.md).
 export function buildUsersChunk(
   chunkIndex: number,
   count: number,
@@ -7,13 +6,13 @@ export function buildUsersChunk(
 ): Record<string, unknown> {
   return {
     users: Array.from({ length: count }, (_, userIndex) => {
-      const id = String(chunkIndex * 10 + userIndex + 1).padStart(3, "0");
+      const id = `${chunkIndex + 1}-${String(userIndex + 1).padStart(3, "0")}`;
       return {
-        name: `Smoke User ${id}`,
         active: true,
+        email: `smoke-user-${id}@example.invalid`,
         first_name: "Smoke",
         last_name: `User${id}`,
-        email: `smoke-user-${id}@example.invalid`,
+        name: `Smoke User ${id}`,
         phone: "555-0101",
         title: "Engineer",
         ...overrides,

@@ -13,9 +13,7 @@ import ForgeReconciler, {
   Textfield,
 } from '@forge/react';
 import React, { useEffect, useState } from 'react';
-import type {
-  Config
-} from '../resolvers/index'
+import type { Config } from '../lib/config';
 
 const App = () => {
   const [context, setContext] = useState<FullContext | null>(null);

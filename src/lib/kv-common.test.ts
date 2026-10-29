@@ -1,13 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { deleteAllValues, getAllValues, iterateAllValues } from "./kv-common";
 import { kvs, WhereConditions } from "@forge/kvs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DataAccessError } from "./errors";
+import {
+  deleteAllValues,
+  getAllValues,
+  getValue,
+  iterateAllValues,
+  nextPage,
+  setValue,
+} from "./kv-common";
 
 vi.mock("@forge/kvs", () => ({
   kvs: {
     batchDelete: vi.fn(),
+    get: vi.fn(),
     query: vi.fn(),
+    set: vi.fn(),
   },
   WhereConditions: {
     beginsWith: vi.fn((value: string) => ({ type: "beginsWith", value })),
@@ -17,6 +25,55 @@ vi.mock("@forge/kvs", () => ({
 describe("kv-common", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe("nextPage", () => {
+    it("returns a caller-controlled page and its cursor without consuming subsequent pages", async () => {
+      const getMany = vi.fn().mockResolvedValue({
+        results: [{ key: "prefix:a", value: 1 }],
+        nextCursor: "next",
+      });
+      const cursor = vi.fn().mockReturnValue({ getMany });
+      const where = vi.fn().mockReturnValue({ cursor });
+      vi.mocked(kvs.query).mockReturnValue({ where } as unknown as ReturnType<
+        typeof kvs.query
+      >);
+      expect(await nextPage<number>("prefix:", "previous")).toEqual({
+        results: [{ key: "prefix:a", value: 1 }],
+        nextCursor: "next",
+      });
+      expect(cursor).toHaveBeenCalledWith("previous");
+      expect(getMany).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("typed value access", () => {
+    it("wraps read errors and preserves the original cause", async () => {
+      const cause = new Error("read failed");
+      vi.mocked(kvs.get).mockRejectedValueOnce(cause);
+      await expect(getValue("key", "load state")).rejects.toMatchObject({
+        code: "KVS_GET_FAILED",
+        cause,
+      });
+    });
+    it("preserves write policies and wraps write errors", async () => {
+      vi.mocked(kvs.set).mockResolvedValueOnce(undefined);
+      await setValue(
+        "key",
+        { count: 1 },
+        { keyPolicy: "FAIL_IF_EXISTS" },
+        "save state",
+      );
+      expect(kvs.set).toHaveBeenLastCalledWith(
+        "key",
+        { count: 1 },
+        { keyPolicy: "FAIL_IF_EXISTS" },
+      );
+      vi.mocked(kvs.set).mockRejectedValueOnce(new Error("write failed"));
+      await expect(
+        setValue("key", 1, { keyPolicy: "OVERRIDE" }, "save state"),
+      ).rejects.toMatchObject({ code: "KVS_SET_FAILED" });
+    });
   });
 
   describe("deleteAllValues", () => {
@@ -77,10 +134,7 @@ describe("kv-common", () => {
         1,
         keys.slice(0, 25).map((key) => ({ key })),
       );
-      expect(kvs.batchDelete).toHaveBeenNthCalledWith(
-        2,
-        [{ key: "key-26" }],
-      );
+      expect(kvs.batchDelete).toHaveBeenNthCalledWith(2, [{ key: "key-26" }]);
 
       expect(result).toStrictEqual({
         successfulKeys: keys.slice(0, 25).map((key) => ({ key })),
@@ -111,7 +165,9 @@ describe("kv-common", () => {
   describe("iterateAllValues", () => {
     it("yields results from a single page", async () => {
       const beginsWithClause = { type: "beginsWith", value: "prefix:" };
-      vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
+      vi.mocked(WhereConditions.beginsWith).mockReturnValue(
+        beginsWithClause as any,
+      );
 
       const getMany = vi.fn().mockResolvedValue({
         results: [
@@ -141,7 +197,9 @@ describe("kv-common", () => {
 
     it("follows pagination cursors across multiple pages", async () => {
       const beginsWithClause = { type: "beginsWith", value: "prefix:" };
-      vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
+      vi.mocked(WhereConditions.beginsWith).mockReturnValue(
+        beginsWithClause as any,
+      );
 
       const firstGetMany = vi.fn().mockResolvedValue({
         results: [
@@ -152,9 +210,7 @@ describe("kv-common", () => {
       });
 
       const secondGetMany = vi.fn().mockResolvedValue({
-        results: [
-          { key: "prefix:3", value: 3 },
-        ],
+        results: [{ key: "prefix:3", value: 3 }],
         nextCursor: undefined,
       });
 
@@ -201,7 +257,9 @@ describe("kv-common", () => {
 
     it("wraps query failures as DataAccessError", async () => {
       const beginsWithClause = { type: "beginsWith", value: "prefix:" };
-      vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
+      vi.mocked(WhereConditions.beginsWith).mockReturnValue(
+        beginsWithClause as any,
+      );
 
       const getMany = vi.fn().mockRejectedValueOnce(new Error("boom"));
       const where = vi.fn().mockReturnValue({ getMany });
@@ -225,12 +283,12 @@ describe("kv-common", () => {
   describe("getAllValues", () => {
     it("collects all values from all pages", async () => {
       const beginsWithClause = { type: "beginsWith", value: "prefix:" };
-      vi.mocked(WhereConditions.beginsWith).mockReturnValue(beginsWithClause as any);
+      vi.mocked(WhereConditions.beginsWith).mockReturnValue(
+        beginsWithClause as any,
+      );
 
       const firstGetMany = vi.fn().mockResolvedValue({
-        results: [
-          { key: "prefix:1", value: 1 },
-        ],
+        results: [{ key: "prefix:1", value: 1 }],
         nextCursor: "cursor-1",
       });
 

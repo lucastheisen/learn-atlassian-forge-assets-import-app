@@ -161,3 +161,6 @@ exports.runAsync = async (event, context) => {
   };
 };
 ```
+
+
+See [User references after import](USER_REFERENCE_SYNC.md) for the implemented association lifecycle and recovery behavior.

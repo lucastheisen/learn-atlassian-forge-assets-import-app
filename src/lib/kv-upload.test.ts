@@ -43,7 +43,8 @@ vi.mock("@forge/kvs", () => ({
   },
 }));
 
-vi.mock("./kv-common", () => ({
+vi.mock("./kv-common", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./kv-common")>(),
   deleteAllValues: vi.fn(),
   getAllValues: vi.fn(),
 }));
