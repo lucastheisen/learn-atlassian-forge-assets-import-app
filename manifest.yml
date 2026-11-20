@@ -40,7 +40,7 @@ modules:
       key: webtriggerDispatch
   scheduledTrigger:
     - function: recoverImports
-      interval: fiveMinute
+      interval: hour
       key: import-recovery
   jiraServiceManagement:assetsImportType:
     - description: User import.

@@ -22,7 +22,9 @@ Workers have a 300-second Forge timeout and a default 60-second finalization res
 
 Rate limits defer work rather than sleeping inside the invocation. A durable not-before time preserves long `Retry-After` delays across queue deliveries. An asset gets at most three processing attempts per run. Unresolved work remains pending for the next full import. Native processing exceeding 30 minutes marks the run failed but retains admission until a terminal native state is observed. The lifecycle limit defaults to two hours and stops further reference attempts while preserving recovery state. Cancellation similarly waits for native processing to end if Assets has already left its cancellable ingestion phase.
 
-The five-minute recovery trigger re-enqueues stored active and waiting requests if continuation delivery fails or retries are exhausted. Old events cannot mutate a successor's state. Every worker must claim the same active run before doing work. Source deletion cancels work, waits for admission to be released, and removes its run and pending state. A short-lived deletion marker guards late deliveries.
+The hourly recovery trigger re-enqueues stored active and waiting requests if continuation delivery fails or retries are exhausted. Recovery can therefore wait approximately an hour. Old events cannot mutate a successor's state. Every worker must claim the same active run before doing work. Source deletion cancels work, waits for admission to be released, and removes its run and pending state. A short-lived deletion marker guards late deliveries.
+
+Hourly recovery is temporary: the previous five-minute schedule was reported to consume about half the monthly KVS read allocation on its own. Before completing the user-reference synchronization feature, revisit recovery frequency and optimize work and read avoidance, including avoiding repeated scans of completed runs and unnecessary requeueing. Measure idle read usage and recovery latency to choose the final schedule.
 
 ## Performance tuning
 
